@@ -1,0 +1,3 @@
+# 统一换行：源码与站点产物在 Windows 工作区也保持 LF，
+# 避免每次 git add 都刷一遍 LF→CRLF 警告，并让快照 diff 干净。
+* text=auto eol=lf

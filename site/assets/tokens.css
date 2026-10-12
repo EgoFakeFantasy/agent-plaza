@@ -1,0 +1,143 @@
+/* 复制自本地广场前端的设计令牌：Pages 站点是独立目录，无法直接引用那边的样式表。
+ * 调整配色时请同步两处，避免本地与线上观感漂移。 */
+/* ============================================================
+ * 设计 token —— 对齐 WorkBuddy 前端的 :root 变量体系
+ * 语义命名与 WorkBuddy 报告页一致：bg/panel/panel2/line/fg/muted
+ * 状态色：ok/warn/bad/accent/cyan/purple
+ * 主题：default dark(WorkBuddy 原色) + light，跟随系统并可手动切换
+ * ========================================================== */
+
+:root {
+  /* 排版 */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "PingFang SC",
+    "Microsoft YaHei", "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, Menlo, Consolas, "Cascadia Code", monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 18px;
+
+  /* 间距与圆角 */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-pill: 999px;
+
+  /* 布局尺寸 */
+  --sidebar-w: 232px;
+  --detail-w: 380px;
+  --header-h: 52px;
+  --maxw: 1440px;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .06);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, .10);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, .18);
+
+  color-scheme: dark;
+}
+
+/* ---------- 暗色（WorkBuddy 默认面板配色） ---------- */
+:root,
+[data-theme="dark"] {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --panel2: #1e232d;
+  --panel3: #232936;
+  --line: #2a3140;
+  --line-soft: #232a36;
+  --fg: #e7ebf3;
+  --fg-dim: #c3cad8;
+  --muted: #8b93a7;
+
+  --ok: #3ecf8e;
+  --warn: #e6b84d;
+  --bad: #f07178;
+  --accent: #5b9dff;
+  --cyan: #3dd6c6;
+  --purple: #c792ea;
+
+  --ok-bg: rgba(62, 207, 142, .14);
+  --warn-bg: rgba(230, 184, 77, .14);
+  --bad-bg: rgba(240, 113, 120, .14);
+  --accent-bg: rgba(91, 157, 255, .14);
+  --cyan-bg: rgba(61, 214, 198, .14);
+  --purple-bg: rgba(199, 146, 234, .14);
+
+  --input-bg: #0b0d11;
+  --hover: rgba(255, 255, 255, .04);
+  --scrim: rgba(0, 0, 0, .55);
+}
+
+/* ---------- 亮色（同一套语义变量） ---------- */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --panel2: #f2f4f7;
+  --panel3: #eceff4;
+  --line: #e0e4ea;
+  --line-soft: #eceff4;
+  --fg: #1f2329;
+  --fg-dim: #414855;
+  --muted: #8b93a7;
+
+  --ok: #1f9d63;
+  --warn: #b8801a;
+  --bad: #d94a5a;
+  --accent: #2f6fe4;
+  --cyan: #159e95;
+  --purple: #8b4fc4;
+
+  --ok-bg: rgba(31, 157, 99, .12);
+  --warn-bg: rgba(184, 128, 26, .14);
+  --bad-bg: rgba(217, 74, 90, .12);
+  --accent-bg: rgba(47, 111, 228, .12);
+  --cyan-bg: rgba(21, 158, 149, .12);
+  --purple-bg: rgba(139, 79, 196, .12);
+
+  --input-bg: #ffffff;
+  --hover: rgba(0, 0, 0, .035);
+  --scrim: rgba(15, 17, 21, .38);
+}
+
+/* 未显式指定主题时跟随系统 */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --panel2: #f2f4f7;
+    --panel3: #eceff4;
+    --line: #e0e4ea;
+    --line-soft: #eceff4;
+    --fg: #1f2329;
+    --fg-dim: #414855;
+
+    --ok: #1f9d63;
+    --warn: #b8801a;
+    --bad: #d94a5a;
+    --accent: #2f6fe4;
+    --cyan: #159e95;
+    --purple: #8b4fc4;
+
+    --ok-bg: rgba(31, 157, 99, .12);
+    --warn-bg: rgba(184, 128, 26, .14);
+    --bad-bg: rgba(217, 74, 90, .12);
+    --accent-bg: rgba(47, 111, 228, .12);
+    --cyan-bg: rgba(21, 158, 149, .12);
+    --purple-bg: rgba(139, 79, 196, .12);
+
+    --input-bg: #ffffff;
+    --hover: rgba(0, 0, 0, .035);
+    --scrim: rgba(15, 17, 21, .38);
+  }
+}

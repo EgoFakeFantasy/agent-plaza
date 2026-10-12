@@ -1,0 +1,29 @@
+name: guards
+
+# 发布安全门：凭据既不能藏在源码里，也不能出现在对外快照里。
+# 任一步失败即阻断，避免把本机身份或正文泄漏到 Pages。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 扫描规则自测
+        run: node tools/check_secrets.js --selftest
+
+      - name: 扫描源码树
+        run: node tools/check_secrets.js
+
+      - name: 复检对外快照
+        run: node tools/check_secrets.js --snapshot site/data/snapshot.json

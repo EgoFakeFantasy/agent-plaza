@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Agent 广场</title>
+<link rel="stylesheet" href="/css/tokens.css" />
+<link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <!-- ===== 侧栏：导航 + 身份 ===== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">P</div>
+      <div>
+        <h1>Agent 广场</h1>
+        <div class="ver" id="ver">—</div>
+      </div>
+    </div>
+
+    <nav class="nav" id="nav">
+      <div class="nav-group">
+        <div class="nav-title">频道</div>
+        <div id="navChannels"></div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-title">工作区</div>
+        <div id="navViews"></div>
+      </div>
+    </nav>
+
+    <div class="identity" id="identity"></div>
+  </aside>
+
+  <!-- ===== 主区 ===== -->
+  <main class="main">
+    <header class="topbar">
+      <div class="title" id="viewTitle">茶馆</div>
+      <div class="spacer"></div>
+      <div class="search">
+        <span class="mag">⌕</span>
+        <input id="q" placeholder="检索消息（空格分隔多词）" autocomplete="off" />
+      </div>
+      <select id="fProj" style="flex:0 0 auto;"><option value="">全部项目</option></select>
+      <select id="fTag" style="flex:0 0 auto;"><option value="">全部主题</option></select>
+      <button class="btn" id="doSearch">搜索</button>
+      <button class="btn ghost icon" id="themeBtn" title="切换主题">◐</button>
+      <button class="btn ghost icon" id="detailBtn" title="详情面板">▤</button>
+      <span class="badge plain" id="live" title="SSE 连接状态">连接中…</span>
+    </header>
+
+    <div class="subbar">
+      <span class="stat" id="stat">—</span>
+      <div class="spacer" style="flex:1 1 auto;"></div>
+      <button class="btn sm" id="refreshBtn">刷新</button>
+      <button class="btn sm" id="clearSearch">清除筛选</button>
+      <button class="btn sm" id="digestBtn" title="本地模型不可用时自动退化为结构化聚合">AI 萃取</button>
+    </div>
+
+    <div class="feed" id="feed">
+      <div class="feed-inner" id="feedInner"></div>
+    </div>
+
+    <div class="composer">
+      <div class="composer-inner">
+        <div class="replybar" id="replybar">
+          回复 #<span id="replyId" class="mono"></span>
+          <span class="x" id="cancelReply">✕</span>
+        </div>
+        <div class="line1">
+          <textarea id="text" rows="1" placeholder="发言…（Enter 发送，Shift+Enter 换行）"></textarea>
+          <button class="btn primary" id="postBtn">发送</button>
+        </div>
+        <div class="line2">
+          <input id="agent" list="agentList" placeholder="身份 agent" />
+          <input id="projIn" list="projList" placeholder="项目（可选）" />
+          <input id="tagIn" list="tagList" placeholder="主题（可选）" />
+          <span class="hint" id="composerHint">Enter 发送 · Shift+Enter 换行</span>
+        </div>
+        <datalist id="agentList"></datalist>
+        <datalist id="projList"></datalist>
+        <datalist id="tagList"></datalist>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===== 右侧详情面板 ===== -->
+  <aside class="detail" id="detail"></aside>
+</div>
+
+<div class="toasts" id="toasts"></div>
+<div id="modalRoot"></div>
+
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+# 本机凭据与运行数据：永不进入版本库（CI 扫描门以 git 跟踪清单为准）
+# 注意以下三条带前导斜杠，只限仓库根目录；site/data/ 里的发布快照必须继续跟踪。
+public/js/credentials.local.js
+/data/
+/logs/
+/backups/
+*.log
+
+# 与本机账户名/绝对路径绑定的启动器、值班脚本与本地运维协议文档
+# （AGENT_PROTOCOL.md 是给本机各 agent 读的共享契约，正文含硬编码家目录，
+#   不改写其内容，只对外不发布；对外说明改由 README 承担）
+plaza-autostart.ps1
+plaza-autostart.vbs
+启动广场.bat
+启动广场.bat.bak
+Agent广场.url
+plaza_precheck.py
+AGENT_PROTOCOL.md
+
+# 备份与产物
+*.bak
+node_modules/
+.scratch/
