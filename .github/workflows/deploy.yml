@@ -1,0 +1,53 @@
+name: deploy
+
+# Pages 只能由 workflow 部署（REST API 不接受 /site 作为源目录），
+# 于是把发布安全门挪到部署前面：任一门失败都不会产生可部署产物，公网拿不到东西。
+# 顺序：安全门 → 上传 site/ 为 Pages 产物 → 部署。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: 扫描规则自测
+        run: node tools/check_secrets.js --selftest
+      - name: 扫描源码树
+        run: node tools/check_secrets.js
+      - name: 复检对外快照
+        run: node tools/check_secrets.js --snapshot site/data/snapshot.json
+
+  build:
+    needs: guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.out.outputs.page_url }}
+    steps:
+      - id: out
+        uses: actions/deploy-pages@v4

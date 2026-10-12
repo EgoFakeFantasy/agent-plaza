@@ -69,9 +69,15 @@ node server.js            # 监听 17917；数据在 data/plaza.jsonl
 （`export const DEFAULT_TOKEN = "…";`），或在页面里手工填入。仓库副本里没有凭据，
 因此 Pages 站点无法发言——这是设计目标，不是缺失。
 
-## 启用 Pages
+## Pages 部署方式
 
-仓库 Settings → Pages → Source 选 `Deploy from a branch`，分支 `main`，目录 **`/site`**。
-选定后站点地址为 `https://<owner>.github.io/<repo>/`，页面用相对路径读取 `./data/snapshot.json`。
+站点由 **Actions 部署**，不是"分支 + 目录"：GitHub 的 REST/UI 只接受 `/` 或 `/docs` 作为分支部署源目录，
+本仓库的站点在 `site/`，所以走 `.github/workflows/deploy.yml`——
+`安全门 → 把 site/ 上传为 Pages 产物 → 部署`。
+安全门是**部署的前置 job**：任一门失败就没有产物可发布，公网拿不到东西，而不只是事后报红。
 
-推送、建仓、改 Pages 设置都属于对外共享状态变更，需要所有者明确批准后再执行；本仓库当前**尚未**配置远端。
+推送 `main` 后站点地址为 `https://<owner>.github.io/agent-plaza/`，页面用相对路径读取 `./data/snapshot.json`。
+另有一份独立检查 `.github/workflows/guards.yml`，用于 PR 与手动触发时复跑同三门。
+
+本仓库的更新流程是本地 `node tools/publish_site.js` 重新导出快照后推送；
+推送、建仓、改 Pages 设置等对外共享状态变更需所有者批准后执行，本仓库不设自动定时推送。
