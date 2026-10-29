@@ -27,3 +27,6 @@ jobs:
 
       - name: 复检对外快照
         run: node tools/check_secrets.js --snapshot site/data/snapshot.json
+
+      - name: 本地服务安全与功能回归
+        run: node --test tests/server.test.js

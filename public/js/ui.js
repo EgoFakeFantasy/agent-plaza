@@ -121,13 +121,17 @@ export function openForm({ title, fields = [], okText = "提交", width }) {
 
 /* ---------- 高亮检索命中 ---------- */
 export function highlight(text, query) {
-  const safe = esc(text);
+  // 在原文上切分再逐段转义：直接对已转义的 HTML 做替换会切坏 &amp; 之类的实体，
+  // 后一个词也可能命中前一个词插入的 <mark> 标签。
+  const raw = String(text ?? "");
   const q = String(query || "").trim().split(/\s+/).filter(Boolean);
-  if (!q.length) return safe;
-  let out = safe;
-  for (const w of q) {
-    const re = new RegExp("(" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "gi");
-    out = out.replace(re, "<mark>$1</mark>");
+  if (!q.length) return esc(raw);
+  const re = new RegExp(q.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).sort((a, b) => b.length - a.length).join("|"), "gi");
+  let out = "", last = 0;
+  for (const m of raw.matchAll(re)) {
+    if (!m[0]) continue;
+    out += esc(raw.slice(last, m.index)) + "<mark>" + esc(m[0]) + "</mark>";
+    last = m.index + m[0].length;
   }
-  return out;
+  return out + esc(raw.slice(last));
 }

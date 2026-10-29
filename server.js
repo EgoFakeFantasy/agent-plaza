@@ -14,8 +14,8 @@ const HOST = process.env.PLAZA_HOST || "127.0.0.1";
 const ROOT = __dirname;
 const DATA_DIR = path.join(ROOT, "data");
 const DATA_FILE = process.env.PLAZA_DATA || path.join(DATA_DIR, "plaza.jsonl");
-const AGENTS_FILE = path.join(DATA_DIR, "agents.json");
-const LOG_DIR = path.join(ROOT, "logs");
+const AGENTS_FILE = process.env.PLAZA_AGENTS || path.join(DATA_DIR, "agents.json");
+const LOG_DIR = process.env.PLAZA_LOG_DIR || path.join(ROOT, "logs");
 const OLLAMA = process.env.PLAZA_OLLAMA || "http://127.0.0.1:11434";
 const DIGEST_MODEL = process.env.PLAZA_DIGEST_MODEL || "qwen3.5:9b";
 const VERSION = "3.0.0";
@@ -50,6 +50,59 @@ const TOPIC_LEX = [
 ];
 const STATUS_SET = ["have", "partial", "missing", "unknown"];
 
+// ---------- 来源校验 ----------
+// 广场只服务本机：浏览器里任意网页都能向 127.0.0.1 发请求（CSRF），也能借 DNS 重绑定
+// 把自己的域名解析到 127.0.0.1 来读数据。因此：Host 必须是本机名（或显式放行的名字），
+// 带 Origin 的请求必须同源（或在 PLAZA_CORS_ORIGINS 白名单里）；不带 Origin 的命令行
+// agent（curl / 脚本）不受影响。
+const LOOPBACK_NAMES = ["localhost", "127.0.0.1", "[::1]"];
+const ALLOWED_HOSTS = new Set([
+  ...LOOPBACK_NAMES,
+  ...(["0.0.0.0", "::", ""].includes(HOST) ? [] : [HOST.includes(":") && !HOST.startsWith("[") ? `[${HOST}]` : HOST]),
+  ...String(process.env.PLAZA_ALLOWED_HOSTS || "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean),
+].map((x) => x.toLowerCase()));
+const CORS_ORIGINS = new Set(String(process.env.PLAZA_CORS_ORIGINS || "").split(",").map((x) => x.trim()).filter(Boolean));
+
+function hostAllowed(req) {
+  const h = String(req.headers.host || "").toLowerCase();
+  const name = h.startsWith("[") ? h.slice(0, h.indexOf("]") + 1) : h.split(":")[0];
+  return ALLOWED_HOSTS.has(name);
+}
+function originAllowed(req) {
+  const origin = req.headers.origin;
+  if (!origin || origin === "null" && req.headers["sec-fetch-site"] === "same-origin") return true;
+  if (CORS_ORIGINS.has(origin)) return true;
+  try {
+    const o = new URL(origin);
+    return o.host.toLowerCase() === String(req.headers.host || "").toLowerCase() && ALLOWED_HOSTS.has(o.hostname.toLowerCase());
+  } catch { return false; }
+}
+function corsHeaders(req) {
+  const origin = req.headers.origin;
+  return origin && CORS_ORIGINS.has(origin)
+    ? { "Access-Control-Allow-Origin": origin, Vary: "Origin", "Access-Control-Allow-Headers": "Content-Type, x-plaza-token", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" }
+    : {};
+}
+const SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "X-Frame-Options": "DENY",
+};
+const PAGE_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'";
+
+// 令牌比较：定长摘要后用 timingSafeEqual，避免逐字节比较泄漏前缀。
+function tokenEquals(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || !a || !b) return false;
+  const ha = crypto.createHash("sha256").update(a).digest();
+  const hb = crypto.createHash("sha256").update(b).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
+function intParam(v, def, min, max) {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def;
+}
+
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
 const DATA_PARENT = path.dirname(DATA_FILE);
@@ -63,29 +116,52 @@ function logLine(s) {
 }
 
 // ---------- 代理注册表（agents.json，可读写；不含消息，独立于 plaza.jsonl） ----------
-let agents = {}; // name -> {token, trust, caps:[], lastSeen, status}
+// 无原型对象 + 自有属性查找：名为 "__proto__" / "constructor" 的 agent 不会命中或污染 Object.prototype。
+let agents = Object.create(null); // name -> {token, trust, caps:[], lastSeen, status}
+function getAgent(name) {
+  return Object.prototype.hasOwnProperty.call(agents, name) ? agents[name] : null;
+}
 function loadAgents() {
-  try { agents = JSON.parse(fs.readFileSync(AGENTS_FILE, "utf8")); }
-  catch { agents = {}; }
+  let raw;
+  try { raw = fs.readFileSync(AGENTS_FILE, "utf8"); } catch { agents = Object.create(null); return; }
+  try {
+    const parsed = JSON.parse(raw);
+    agents = Object.create(null);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      for (const [k, v] of Object.entries(parsed)) if (v && typeof v === "object") agents[k] = v;
+    }
+  } catch (e) {
+    // 文件损坏时不能当成空表继续跑：下一次 saveAgents 会把所有注册与令牌覆盖掉。
+    const bad = AGENTS_FILE + ".corrupt-" + Date.now();
+    try { fs.copyFileSync(AGENTS_FILE, bad); } catch {}
+    logLine(`[FATAL] agents.json 无法解析（${e.message}），已另存为 ${bad}；请修复后再启动。`);
+    process.exit(1);
+  }
 }
 function saveAgents() {
-  try { fs.writeFileSync(AGENTS_FILE, JSON.stringify(agents, null, 2)); } catch (e) { logLine("[WARN] agents.json 写入失败: " + e.message); }
+  // 先写临时文件再原子改名：进程中途退出不会留下半截 JSON；文件含令牌，只给属主读写。
+  const tmp = AGENTS_FILE + ".tmp";
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(agents, null, 2), { mode: 0o600 });
+    fs.renameSync(tmp, AGENTS_FILE);
+  } catch (e) { logLine("[WARN] agents.json 写入失败: " + e.message); }
 }
 loadAgents();
 
 // 写操作鉴权：legacy 本地 agent（未注册）默认放行，保持向后兼容；
 // external-readonly 一律拒写；external-allowlisted 须带正确 token。
 function authWrite(agent, token) {
-  const e = agents[String(agent)];
+  const e = getAgent(String(agent));
   if (!e) return { ok: true, trust: "local" };
   if (e.trust === "external-readonly") return { ok: false, code: 403, err: "external-readonly 不可写" };
   if (e.trust === "external-allowlisted") {
-    if (!token || token !== e.token) return { ok: false, code: 401, err: "token 无效" };
+    if (!tokenEquals(token, e.token)) return { ok: false, code: 401, err: "token 无效" };
   }
-  return { ok: true, trust: e.trust };
+  return { ok: true, trust: e.trust || "registered" };
 }
 function reqToken(req) {
-  return req.headers["x-plaza-token"] || null;
+  const t = req.headers["x-plaza-token"];
+  return typeof t === "string" && t ? t : null;
 }
 
 // ---------- 审计（追加 type:audit 到 plaza.jsonl，永不删除/改写） ----------
@@ -136,6 +212,13 @@ for (const m of messages) {
 }
 
 const sseClients = new Set();
+const SSE_MAX = 64;
+// 心跳：保持代理/浏览器不掐断空闲连接，同时及时清掉已经断开的客户端。
+setInterval(() => {
+  for (const res of sseClients) {
+    try { res.write(": ping\n\n"); } catch { sseClients.delete(res); }
+  }
+}, 25000).unref();
 function broadcast(obj) {
   const data = `data: ${JSON.stringify(obj)}\n\n`;
   for (const res of sseClients) {
@@ -160,16 +243,31 @@ function saveTask(rec) {
 // ---------- 工具 ----------
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", (c) => { body += c; if (body.length > 1e6) req.destroy(); });
-    req.on("end", () => { try { resolve(JSON.parse(body || "{}")); } catch (e) { reject(e); } });
-    req.on("error", reject);
+    const chunks = [];
+    let size = 0, done = false;
+    req.on("data", (c) => {
+      if (done) return;
+      size += c.length;
+      if (size > 1e6) { done = true; reject(new Error("请求体过大")); req.destroy(); return; }
+      chunks.push(c);
+    });
+    req.on("end", () => {
+      if (done) return;
+      done = true;
+      try {
+        const v = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+        // 只接受 JSON 对象：null / 数组 / 标量在下游取字段时会抛错。
+        if (!v || typeof v !== "object" || Array.isArray(v)) return reject(new Error("请求体必须是 JSON 对象"));
+        resolve(v);
+      } catch (e) { reject(e); }
+    });
+    req.on("error", (e) => { if (!done) { done = true; reject(e); } });
   });
 }
 
 function json(res, code, obj) {
   const s = JSON.stringify(obj, null, 0);
-  res.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" });
+  res.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...SECURITY_HEADERS, ...(res.cors || {}) });
   res.end(s);
 }
 
@@ -325,15 +423,36 @@ async function aiDigest(channel, count) {
 
 // ---------- 路由 ----------
 const server = http.createServer(async (req, res) => {
+  try {
+    await route(req, res);
+  } catch (e) {
+    // 任何未预期异常都只影响这一个请求，不能把整个服务带崩（async 回调里的异常是未处理 rejection）。
+    logLine(`[ERROR] ${req.method} ${String(req.url).slice(0, 200)}: ${e && e.stack || e}`);
+    if (!res.headersSent) json(res, 500, { error: "服务内部错误" });
+    else try { res.end(); } catch {}
+  }
+});
+
+async function route(req, res) {
+  if (!hostAllowed(req)) {
+    res.writeHead(421, { "Content-Type": "text/plain; charset=utf-8", ...SECURITY_HEADERS });
+    return res.end("Host 不在本机白名单内");
+  }
+  if (!originAllowed(req)) {
+    res.writeHead(403, { "Content-Type": "application/json; charset=utf-8", ...SECURITY_HEADERS });
+    return res.end(JSON.stringify({ error: "跨站请求已拒绝" }));
+  }
+  res.cors = corsHeaders(req);
+
   const u = new URL(req.url, `http://localhost:${PORT}`);
   const p = u.pathname;
   const qp = u.searchParams;
 
-  if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
+  if (req.method === "OPTIONS") { res.writeHead(204, { ...SECURITY_HEADERS, ...res.cors }); return res.end(); }
 
   // 网页前端
   if (p === "/" || p === "/index.html") {
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": PAGE_CSP, ...SECURITY_HEADERS });
     return res.end(fs.readFileSync(path.join(ROOT, "public", "index.html")));
   }
 
@@ -350,7 +469,8 @@ const server = http.createServer(async (req, res) => {
 
   // SSE 实时推送（消息 + 任务事件）
   if (p === "/api/events") {
-    res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+    if (sseClients.size >= SSE_MAX) return json(res, 503, { error: "实时连接数已达上限" });
+    res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", ...SECURITY_HEADERS, ...res.cors });
     res.write("retry: 3000\n\n");
     sseClients.add(res);
     req.on("close", () => sseClients.delete(res));
@@ -363,17 +483,33 @@ const server = http.createServer(async (req, res) => {
     try {
       const b = await readBody(req);
       if (!b.agent) return json(res, 400, { error: "需要 agent 字段" });
-      const name = String(b.agent).slice(0, 40);
-      const trust = TRUST_TIERS.includes(b.trust) ? b.trust : (agents[name] ? agents[name].trust : "registered");
-      if (!agents[name]) {
-        agents[name] = { token: crypto.randomBytes(16).toString("hex"), trust, caps: [], lastSeen: null, status: "offline" };
-      } else {
-        agents[name].trust = trust;
-        if (b.token) agents[name].token = String(b.token).slice(0, 64);
+      const name = String(b.agent).trim().slice(0, 40);
+      if (!name) return json(res, 400, { error: "需要 agent 字段" });
+      if (b.token != null && (typeof b.token !== "string" || b.token.length < 16 || b.token.length > 64)) {
+        return json(res, 400, { error: "自定义 token 须为 16–64 字符的字符串" });
       }
+      const existing = getAgent(name);
+      if (!existing) {
+        const trust = TRUST_TIERS.includes(b.trust) ? b.trust : "registered";
+        agents[name] = { token: crypto.randomBytes(16).toString("hex"), trust, caps: [], lastSeen: null, status: "offline" };
+        saveAgents();
+        audit("register", name, true, "trust=" + trust);
+        return json(res, 200, { ok: true, agent: name, token: agents[name].token, trust });
+      }
+      // 已注册：改分级或换令牌必须出示当前令牌；否则任何人都能拿走别人的令牌、
+      // 或把 external-readonly 自行升级成可写。无令牌的重复注册保持幂等，只是不回显令牌。
+      if (!tokenEquals(reqToken(req), existing.token)) {
+        if (b.trust == null && b.token == null) {
+          return json(res, 200, { ok: true, agent: name, trust: existing.trust, already_registered: true, hint: "已注册；令牌只在首次注册时返回，修改分级或换令牌需在 x-plaza-token 中出示当前令牌" });
+        }
+        audit("register", name, false, "未出示有效令牌");
+        return json(res, 401, { error: "该 agent 已注册；修改分级或令牌需在 x-plaza-token 中出示当前令牌" });
+      }
+      if (TRUST_TIERS.includes(b.trust)) existing.trust = b.trust;
+      if (b.token) existing.token = b.token;
       saveAgents();
-      audit("register", name, true, "trust=" + agents[name].trust);
-      return json(res, 200, { ok: true, agent: name, token: agents[name].token, trust: agents[name].trust });
+      audit("register", name, true, "trust=" + existing.trust + (b.token ? " token-rotated" : ""));
+      return json(res, 200, { ok: true, agent: name, token: existing.token, trust: existing.trust });
     } catch { return json(res, 400, { error: "JSON 解析失败" }); }
   }
 
@@ -382,10 +518,9 @@ const server = http.createServer(async (req, res) => {
     try {
       const b = await readBody(req);
       const name = String(b.agent || "").slice(0, 40);
-      const e = agents[name];
+      const e = getAgent(name);
       if (!e) return json(res, 404, { error: "agent 未注册，先 POST /api/register" });
-      const tk = reqToken(req);
-      if (e.trust === "external-allowlisted" && (!tk || tk !== e.token)) return json(res, 401, { error: "token 无效" });
+      if (e.trust === "external-allowlisted" && !tokenEquals(reqToken(req), e.token)) return json(res, 401, { error: "token 无效" });
       if (Array.isArray(b.caps)) e.caps = b.caps.map((x) => String(x).slice(0, 40));
       saveAgents();
       audit("caps.update", name, true, (e.caps || []).join(","));
@@ -405,8 +540,9 @@ const server = http.createServer(async (req, res) => {
     try {
       const b = await readBody(req);
       const name = String(b.agent || "").slice(0, 40);
-      const e = agents[name];
+      const e = getAgent(name);
       if (!e) return json(res, 404, { error: "agent 未注册，先 POST /api/register" });
+      if (e.trust === "external-allowlisted" && !tokenEquals(reqToken(req), e.token)) return json(res, 401, { error: "token 无效" });
       e.status = b.status === "offline" ? "offline" : "online";
       e.lastSeen = new Date().toISOString();
       if (Array.isArray(b.caps) && b.caps.length) e.caps = b.caps.map((x) => String(x).slice(0, 40));
@@ -427,9 +563,9 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/task" && req.method === "POST") {
     try {
       const b = await readBody(req);
+      if (!b.from || !b.title || !b.brief) return json(res, 400, { error: "需要 from / title / brief" });
       const aw = authWrite(b.from, reqToken(req));
       if (!aw.ok) return json(res, aw.code, { error: aw.err });
-      if (!b.from || !b.title || !b.brief) return json(res, 400, { error: "需要 from / title / brief" });
       const rec = {
         id: nextId++, task_id: nextTaskId++, type: "task", action: "create", state: "open",
         from: String(b.from).slice(0, 40),
@@ -455,7 +591,12 @@ const server = http.createServer(async (req, res) => {
       const t = tasks.get(id);
       if (!t) return json(res, 404, { error: "任务不存在" });
       if (t.state !== "open") return json(res, 400, { error: "仅 open 状态可认领，当前=" + t.state });
-      const rec = { ...t, id: nextId++, action: "claim", state: "claimed", claimed_by: String(b.by || b.agent || "?").slice(0, 40), ts: new Date().toISOString() };
+      const by = String(b.by || b.agent || "").slice(0, 40);
+      if (!by) return json(res, 400, { error: "需要 by 字段" });
+      const aw = authWrite(by, reqToken(req));
+      if (!aw.ok) return json(res, aw.code, { error: aw.err });
+      if (t.to && t.to !== by) return json(res, 403, { error: "该任务指定派给 " + t.to });
+      const rec = { ...t, id: nextId++, action: "claim", state: "claimed", claimed_by: by, ts: new Date().toISOString() };
       saveTask(rec);
       audit("task.claim", rec.claimed_by, true, "#" + id);
       return json(res, 200, { ok: true, task: rec });
@@ -469,11 +610,18 @@ const server = http.createServer(async (req, res) => {
       const t = tasks.get(id);
       if (!t) return json(res, 404, { error: "任务不存在" });
       if (!(t.state === "open" || t.state === "claimed")) return json(res, 400, { error: "任务状态不可回结果，当前=" + t.state });
+      const by = String(b.by || b.agent || "").slice(0, 40);
+      if (!by) return json(res, 400, { error: "需要 by 字段" });
+      const aw = authWrite(by, reqToken(req));
+      if (!aw.ok) return json(res, aw.code, { error: aw.err });
+      // 已被认领的任务只由认领者或发起者回结果，避免他人替别人「完成」任务。
+      if (t.state === "claimed" && by !== t.claimed_by && by !== t.from) return json(res, 403, { error: "任务已由 " + t.claimed_by + " 认领，只有认领者或发起者可回结果" });
+      if (t.state === "open" && t.to && by !== t.to && by !== t.from) return json(res, 403, { error: "该任务指定派给 " + t.to });
       const outcome = b.outcome === "failed" ? "failed" : "done";
       const rec = { ...t, id: nextId++, action: "result", state: outcome,
         result: String(b.result || "").slice(0, 4000),
         artifacts: asArray(b.artifacts).slice(0, 10),
-        by: String(b.by || b.agent || "?").slice(0, 40), ts: new Date().toISOString() };
+        by, ts: new Date().toISOString() };
       saveTask(rec);
       audit("task.result", rec.by, true, "#" + id + " -> " + outcome);
       return json(res, 200, { ok: true, task: rec });
@@ -498,6 +646,11 @@ const server = http.createServer(async (req, res) => {
       const aw = authWrite(b.agent, reqToken(req));
       if (!aw.ok) return json(res, aw.code, { error: aw.err });
       if (!b.agent || !b.text) return json(res, 400, { error: "需要 agent 和 text 字段" });
+      // reply_to 允许数字或数字字符串；指向不存在的消息时拒绝，免得「未答求助」永远挂着悬空回复。
+      const replyTo = /^\d+$/.test(String(b.reply_to ?? "")) ? Number(b.reply_to) : null;
+      if (replyTo != null && !messages.some((x) => x.id === replyTo && isMsg(x))) {
+        return json(res, 400, { error: "reply_to 指向的消息不存在：#" + replyTo });
+      }
       const channel = CHANNELS.includes(b.channel) ? b.channel : "茶馆";
       const rawText = String(b.text);
       const hasProj = Object.prototype.hasOwnProperty.call(b, "project") && b.project !== undefined;
@@ -506,10 +659,10 @@ const server = http.createServer(async (req, res) => {
         id: nextId++, ts: new Date().toISOString(), type: "msg",
         agent: String(b.agent).slice(0, 40), channel,
         text: rawText.slice(0, TEXT_LIMIT),
-        reply_to: Number.isInteger(b.reply_to) ? b.reply_to : null,
+        reply_to: replyTo,
         project: b.project ? String(b.project).slice(0, 40) : null,
         tags: asArray(b.tags).slice(0, 12),
-        trust: b.trust ? String(b.trust).slice(0, 20) : "local",
+        trust: aw.trust, // 分级来自注册表，不信任客户端自报
         is_digest: false,
       };
       if (!hasProj || !hasTags) {
@@ -534,13 +687,13 @@ const server = http.createServer(async (req, res) => {
 
   // 读消息（支持 q / project / tag / trust / channel / after）
   if (p === "/api/feed") {
-    const limit = Math.min(parseInt(qp.get("limit") || "50"), 200);
+    const limit = intParam(qp.get("limit"), 50, 1, 200);
     const f = {
       channel: qp.get("channel") || null,
       project: qp.get("project") || null,
       tag: qp.get("tag") || null,
       trust: qp.get("trust") || null,
-      after: parseInt(qp.get("after") || "0"),
+      after: intParam(qp.get("after"), 0, 0, Number.MAX_SAFE_INTEGER),
     };
     let out;
     if (qp.get("q")) {
@@ -553,7 +706,7 @@ const server = http.createServer(async (req, res) => {
 
   // 检索（默认返回片段，省 token；full=1 取全文）
   if (p === "/api/search") {
-    const limit = Math.min(parseInt(qp.get("limit") || "10"), 50);
+    const limit = intParam(qp.get("limit"), 10, 1, 50);
     const terms = String(qp.get("q") || "").toLowerCase().split(/\s+/).filter(Boolean);
     const hits = search({
       q: qp.get("q") || "",
@@ -561,7 +714,7 @@ const server = http.createServer(async (req, res) => {
       project: qp.get("project") || null,
       tag: qp.get("tag") || null,
       trust: qp.get("trust") || null,
-      after: parseInt(qp.get("after") || "0"),
+      after: intParam(qp.get("after"), 0, 0, Number.MAX_SAFE_INTEGER),
     }).slice(0, limit);
     const full = qp.get("full") === "1";
     return json(res, 200, {
@@ -591,8 +744,8 @@ const server = http.createServer(async (req, res) => {
 
   // 一键简报：agent 进场时读这个，一次拿到全局概况（省 token 的核心接口）
   if (p === "/api/context") {
-    const per = Math.min(parseInt(qp.get("per") || "3"), 20);
-    const trim = qp.get("trim") === "0" ? 0 : Math.min(parseInt(qp.get("trim") || "280"), 4000);
+    const per = intParam(qp.get("per"), 3, 1, 20);
+    const trim = qp.get("trim") === "0" ? 0 : intParam(qp.get("trim"), 280, 1, 4000);
     const project = qp.get("project") || null;
     const topic = qp.get("topic") || qp.get("tag") || null;
     const full = qp.get("full") === "1";
@@ -604,7 +757,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     const askedHelp = messages.filter(isMsg).filter((m) => m.channel === "求助台" && !m.reply_to);
-    const openHelp = askedHelp.filter((m) => !messages.some((r) => r.reply_to === m.id)).slice(-10).map((m) => compact(m, trim));
+    const replied = new Set(messages.map((r) => r.reply_to).filter(Boolean));
+    const openHelp = askedHelp.filter((m) => !replied.has(m.id)).slice(-10).map((m) => compact(m, trim));
 
     const relevant = [];
     if (project || topic || qp.get("q")) {
@@ -698,7 +852,7 @@ const server = http.createServer(async (req, res) => {
         avoid: asArray(b.avoid).slice(0, 12),
         notes: asArray(b.notes).slice(0, 12),
         agent: String(b.agent || "匿名").slice(0, 40),
-        trust: b.trust ? String(b.trust).slice(0, 20) : "local",
+        trust: aw.trust,
       };
       saveMessage(m);
       audit("board.update", b.agent, true, m.project);
@@ -737,10 +891,10 @@ const server = http.createServer(async (req, res) => {
 
   // AI 萃取经验/画像（无本地模型时自动退化为结构化聚合，不再直接失败）
   if (p === "/api/digest" && req.method === "POST") {
-    let b = {};
-    try { b = await readBody(req); } catch { b = {}; }
+    let b;
+    try { b = await readBody(req); } catch { return json(res, 400, { error: "JSON 解析失败" }); }
     const channel = CHANNELS.includes(b.channel) ? b.channel : "茶馆";
-    const count = Math.min(parseInt(b.count) || 50, 100);
+    const count = intParam(b.count, 50, 3, 100);
     const target = channel === "用户印象" ? "用户印象" : "经验库";
     let text, mode = "llm", note = null;
     try {
@@ -749,7 +903,7 @@ const server = http.createServer(async (req, res) => {
       mode = "structured";
       note = `本地模型不可用（${String(e.message || e).slice(0, 80)}），已退化为不调用模型的结构化聚合。`;
       try { text = structuredDigest(channel, count); }
-      catch (e2) { return json(res, 500, { ok: false, error: String(e2.message || e2) }); }
+      catch (e2) { return json(res, 422, { ok: false, error: String(e2.message || e2) }); }
     }
     const m = saveMessage({
       id: nextId++, ts: new Date().toISOString(), type: "msg",
@@ -763,7 +917,7 @@ const server = http.createServer(async (req, res) => {
 
   // 审计日志查询（仅读最近 N 条）
   if (p === "/api/audit" && req.method === "GET") {
-    const n = Math.min(parseInt(qp.get("limit") || "50"), 500);
+    const n = intParam(qp.get("limit"), 50, 1, 500);
     const acts = [];
     for (const line of fs.readFileSync(DATA_FILE, "utf8").split("\n")) {
       if (!line.trim()) continue;
@@ -796,9 +950,10 @@ const server = http.createServer(async (req, res) => {
       ".json": "application/json; charset=utf-8",
     };
     const pubDir = path.resolve(ROOT, "public");
-    const rel = decodeURIComponent(p.replace(/^\/+/, ""));
-    const file = path.resolve(pubDir, rel);
-    if (file.startsWith(pubDir + path.sep)) {
+    let rel = null;
+    try { rel = decodeURIComponent(p.replace(/^\/+/, "")); } catch { /* 非法百分号编码：按 404 处理 */ }
+    const file = rel != null && !rel.includes("\0") ? path.resolve(pubDir, rel) : null;
+    if (file && file.startsWith(pubDir + path.sep)) {
       const ext = path.extname(file).toLowerCase();
       if (STATIC_TYPES[ext] && fs.existsSync(file) && fs.statSync(file).isFile()) {
         const body = fs.readFileSync(file);
@@ -806,6 +961,8 @@ const server = http.createServer(async (req, res) => {
           "Content-Type": STATIC_TYPES[ext],
           "Cache-Control": "no-cache",
           "Content-Length": body.length,
+          ...SECURITY_HEADERS,
+          ...(ext === ".html" ? { "Content-Security-Policy": PAGE_CSP } : {}),
         });
         return res.end(req.method === "HEAD" ? undefined : body);
       }
@@ -818,7 +975,7 @@ const server = http.createServer(async (req, res) => {
       "/api/board", "/api/upstream", "/api/digest", "/api/agents", "/api/events", "/api/post",
       "/api/register", "/api/caps", "/api/presence", "/api/task", "/api/tasks", "/api/audit"],
   });
-});
+}
 
 server.on("error", (e) => {
   if (e.code === "EADDRINUSE") {
@@ -830,6 +987,9 @@ server.on("error", (e) => {
 });
 
 server.listen(PORT, HOST, () => {
+  if (!["127.0.0.1", "localhost", "::1"].includes(HOST)) {
+    logLine(`[WARN] PLAZA_HOST=${HOST}：广场的读接口不需要令牌，监听非回环地址会把全部消息暴露给同网段。`);
+  }
   logLine(`AgentPlaza v${VERSION} 已启动: http://${HOST}:${PORT}`);
   logLine(`数据: ${DATA_FILE} | 消息 ${messages.filter(isMsg).length} 条 | 状态板 ${boards().length} | 上游地图 ${upstreamItems().length} | 任务 ${tasks.size} | 注册代理 ${Object.keys(agents).length}`);
   logLine(`频道: ${CHANNELS.join(" / ")}`);
