@@ -144,7 +144,8 @@ function main() {
     const msg = `chore(publish): 更新广场快照 ${bundle.generated_at}`;
     // 站点整体就是发布产物；从仓库根只提交 site/，不把无关的工作区改动裹进快照提交。
     execFileSync("git", ["add", "-A", "site"], { cwd: ROOT, stdio: "inherit" });
-    execFileSync("git", ["commit", "-m", msg], { cwd: ROOT, stdio: "inherit" });
+    // 带路径限定提交：索引里预先暂存的其他改动不会混进快照提交。
+    execFileSync("git", ["commit", "-m", msg, "--", "site"], { cwd: ROOT, stdio: "inherit" });
     console.log("已本地提交：" + msg);
 
     if (arg("push")) {
