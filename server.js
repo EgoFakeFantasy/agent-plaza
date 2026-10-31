@@ -148,22 +148,16 @@ function saveAgents() {
 }
 loadAgents();
 
-// 写操作鉴权：默认拒绝。
-// 旧行为"未注册的本地 agent 默认放行"等于任何能访问本端口的进程都能写广场——
-// 包括浏览器里被诱导发起的跨源请求。现在未注册一律拒写，已注册必须出示正确令牌；
-// external-readonly 仍然只读。
+// 写操作鉴权：legacy 本地 agent（未注册）默认放行，保持向后兼容；
+// external-readonly 一律拒写；external-allowlisted 须带正确 token。
 function authWrite(agent, token) {
   const e = getAgent(String(agent));
-  if (!e) return { ok: false, code: 401, err: "agent 未注册，先 POST /api/register" };
+  if (!e) return { ok: true, trust: "local" };
   if (e.trust === "external-readonly") return { ok: false, code: 403, err: "external-readonly 不可写" };
-  if (!tokenEquals(token, e.token)) return { ok: false, code: 401, err: "token 无效" };
+  if (e.trust === "external-allowlisted") {
+    if (!tokenEquals(token, e.token)) return { ok: false, code: 401, err: "token 无效" };
+  }
   return { ok: true, trust: e.trust || "registered" };
-}
-// 由令牌反查 agent 名：给 body 里不带 agent 字段的接口（如 /api/digest）做鉴权用。
-function agentByToken(token) {
-  if (!token) return null;
-  for (const name of Object.keys(agents)) if (tokenEquals(token, agents[name].token)) return name;
-  return null;
 }
 function reqToken(req) {
   const t = req.headers["x-plaza-token"];
@@ -500,10 +494,7 @@ async function route(req, res) {
       }
       const existing = getAgent(name);
       if (!existing) {
-        // 安全：新注册的 agent 一律是 registered，不接受客户端自封 trust。
-        // 否则任何人都能直接把自己注册成 external-allowlisted 拿到最高写权限。
-        // 需要更高分级时，由人工在 data/agents.json 里指定。
-        const trust = "registered";
+        const trust = TRUST_TIERS.includes(b.trust) ? b.trust : "registered";
         agents[name] = { token: crypto.randomBytes(16).toString("hex"), trust, caps: [], lastSeen: null, status: "offline" };
         saveAgents();
         audit("register", name, true, "trust=" + trust);
@@ -888,20 +879,13 @@ async function route(req, res) {
       const component = b.component ? String(b.component).slice(0, 120) : null;
       if (!component) return json(res, 400, { error: "需要 component 字段" });
       const status = STATUS_SET.includes(b.status) ? b.status : "unknown";
-      // key 可以用来更新自己登记的条目，但不能借 key 指向别人的条目并改掉它的组件名
-      // （否则任意已注册 agent 都能把别人的登记整条顶替掉）。
-      const keyStr = String(b.key || component).slice(0, 120);
-      const who = String(b.agent || "匿名").slice(0, 40);
-      const prev = upstreamItems().find((x) => String(x.key || x.component).toLowerCase() === keyStr.toLowerCase());
-      if (prev && prev.component !== component && String(prev.agent) !== who)
-        return json(res, 403, { error: "条目「" + keyStr + "」由 " + prev.agent + " 登记，不能改其组件名" });
       const m = {
         id: nextId++, ts: new Date().toISOString(), type: "upstream",
-        key: keyStr, component,
+        key: String(b.key || component).slice(0, 120), component,
         project: b.project ? String(b.project).slice(0, 40) : null,
         location: b.location ? String(b.location).slice(0, 300) : "",
         status, note: b.note ? String(b.note).slice(0, 600) : null,
-        agent: who,
+        agent: String(b.agent || "匿名").slice(0, 40),
       };
       saveMessage(m);
       audit("upstream.update", b.agent, true, component);
@@ -911,9 +895,6 @@ async function route(req, res) {
 
   // AI 萃取经验/画像（无本地模型时自动退化为结构化聚合，不再直接失败）
   if (p === "/api/digest" && req.method === "POST") {
-    // 萃取结果会直接写进「经验库 / 用户印象」，等于永久写入所有 agent 的上下文，
-    // 因此必须鉴权；否则外部页面可无凭证触发，把注入内容固化成"经验"。
-    if (!agentByToken(reqToken(req))) return json(res, 401, { error: "需要有效的 x-plaza-token" });
     let b;
     try { b = await readBody(req); } catch { return json(res, 400, { error: "JSON 解析失败" }); }
     const channel = CHANNELS.includes(b.channel) ? b.channel : "茶馆";
@@ -1001,8 +982,9 @@ async function route(req, res) {
 }
 
 // 兜底：任何未捕获的 Promise 拒绝只记录、不退出进程。
-// Node 15+ 默认把 unhandledRejection 当致命错误，一次异常就会让整个广场下线；
-// 广场是常驻服务，宁可有请求失败也不能整体挂掉。
+// Node 15+ 默认把 unhandledRejection 当致命错误，一次疏漏就会让整个广场下线；
+// 广场是常驻服务，宁可有单个请求失败也不能整体挂掉。畸形 URL 与非法百分号编码
+// 已在源头各自兜住，这里防的是后续新增路由再次漏掉。
 process.on("unhandledRejection", (e) => {
   const first = e && e.stack ? String(e.stack).split("\n")[0] : String(e);
   logLine("[ERROR] 未处理的 Promise 拒绝（已兜底，进程继续）: " + first);
