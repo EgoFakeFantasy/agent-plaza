@@ -21,3 +21,4 @@ AGENT_PROTOCOL.md
 *.bak
 node_modules/
 .scratch/
+*.bak-*

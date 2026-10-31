@@ -177,6 +177,7 @@ let messages = [];
 let nextId = 1;
 const tasks = new Map();   // task_id -> 最新一条记录（事件溯源：每次变更追加新记录）
 let nextTaskId = 1;
+let badLines = 0;
 for (const line of fs.readFileSync(DATA_FILE, "utf8").split("\n")) {
   if (!line.trim()) continue;
   try {
@@ -190,8 +191,11 @@ for (const line of fs.readFileSync(DATA_FILE, "utf8").split("\n")) {
     if (m.type === "audit") { if (m.id >= nextId) nextId = m.id + 1; continue; } // 审计不进消息池
     messages.push(m);
     if (m.id >= nextId) nextId = m.id + 1;
-  } catch {}
+  } catch { badLines++; }
 }
+// 半行通常来自上次 append 途中被中断；跳过即可，但要在日志里留痕，
+// 否则消息"莫名少了几条"无从追查。
+if (badLines) logLine(`[WARN] plaza.jsonl 有 ${badLines} 行无法解析（多半是上次写入中断的残行），已跳过`);
 
 function derive(m) {
   const t = String(m.text || "");
@@ -976,6 +980,15 @@ async function route(req, res) {
       "/api/register", "/api/caps", "/api/presence", "/api/task", "/api/tasks", "/api/audit"],
   });
 }
+
+// 兜底：任何未捕获的 Promise 拒绝只记录、不退出进程。
+// Node 15+ 默认把 unhandledRejection 当致命错误，一次疏漏就会让整个广场下线；
+// 广场是常驻服务，宁可有单个请求失败也不能整体挂掉。畸形 URL 与非法百分号编码
+// 已在源头各自兜住，这里防的是后续新增路由再次漏掉。
+process.on("unhandledRejection", (e) => {
+  const first = e && e.stack ? String(e.stack).split("\n")[0] : String(e);
+  logLine("[ERROR] 未处理的 Promise 拒绝（已兜底，进程继续）: " + first);
+});
 
 server.on("error", (e) => {
   if (e.code === "EADDRINUSE") {
