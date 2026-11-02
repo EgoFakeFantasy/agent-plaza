@@ -32,9 +32,15 @@ const TRUST_TIERS = ["local", "registered", "external-readonly", "external-allow
 
 // ---------- 字段推断词表（老消息自动打标；新消息可显式传字段覆盖） ----------
 const PROJECT_LEX = [
-  ["bm4", /(\bBM4\b|BMS|良序|Well-?Ordering|BMSConstructibleBridge|stableToUniverse|stageStableLt|OrdinalElementarityWitness)/i],
+  [
+    "bm4",
+    /(\bBM4\b|BMS|良序|Well-?Ordering|BMSConstructibleBridge|stableToUniverse|stageStableLt|OrdinalElementarityWitness)/i,
+  ],
   ["pcf", /(\bPCF\b|PCFAlephOmega4|Aleph|ℵ|阿列夫|幂等|Shelah)/i],
-  ["yesmetazfc", /(\bYesMetaZFC\b|textbookEZF|PureFlattenRecursion|QuineEncoding|TarskiTruth|Delta0Formula|Rosser|元理论|lanxinge|pureStage)/i],
+  [
+    "yesmetazfc",
+    /(\bYesMetaZFC\b|textbookEZF|PureFlattenRecursion|QuineEncoding|TarskiTruth|Delta0Formula|Rosser|元理论|lanxinge|pureStage)/i,
+  ],
 ];
 const TOPIC_LEX = [
   ["lake-build", /(lake\s*build|\.lake|olean|elan|toolchain|构建|编译|jobs|缓存)/i],
@@ -56,12 +62,22 @@ const STATUS_SET = ["have", "partial", "missing", "unknown"];
 // 带 Origin 的请求必须同源（或在 PLAZA_CORS_ORIGINS 白名单里）；不带 Origin 的命令行
 // agent（curl / 脚本）不受影响。
 const LOOPBACK_NAMES = ["localhost", "127.0.0.1", "[::1]"];
-const ALLOWED_HOSTS = new Set([
-  ...LOOPBACK_NAMES,
-  ...(["0.0.0.0", "::", ""].includes(HOST) ? [] : [HOST.includes(":") && !HOST.startsWith("[") ? `[${HOST}]` : HOST]),
-  ...String(process.env.PLAZA_ALLOWED_HOSTS || "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean),
-].map((x) => x.toLowerCase()));
-const CORS_ORIGINS = new Set(String(process.env.PLAZA_CORS_ORIGINS || "").split(",").map((x) => x.trim()).filter(Boolean));
+const ALLOWED_HOSTS = new Set(
+  [
+    ...LOOPBACK_NAMES,
+    ...(["0.0.0.0", "::", ""].includes(HOST) ? [] : [HOST.includes(":") && !HOST.startsWith("[") ? `[${HOST}]` : HOST]),
+    ...String(process.env.PLAZA_ALLOWED_HOSTS || "")
+      .split(",")
+      .map((x) => x.trim().toLowerCase())
+      .filter(Boolean),
+  ].map((x) => x.toLowerCase()),
+);
+const CORS_ORIGINS = new Set(
+  String(process.env.PLAZA_CORS_ORIGINS || "")
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean),
+);
 
 function hostAllowed(req) {
   const h = String(req.headers.host || "").toLowerCase();
@@ -70,17 +86,27 @@ function hostAllowed(req) {
 }
 function originAllowed(req) {
   const origin = req.headers.origin;
-  if (!origin || origin === "null" && req.headers["sec-fetch-site"] === "same-origin") return true;
+  if (!origin || (origin === "null" && req.headers["sec-fetch-site"] === "same-origin")) return true;
   if (CORS_ORIGINS.has(origin)) return true;
   try {
     const o = new URL(origin);
-    return o.host.toLowerCase() === String(req.headers.host || "").toLowerCase() && ALLOWED_HOSTS.has(o.hostname.toLowerCase());
-  } catch { return false; }
+    return (
+      o.host.toLowerCase() === String(req.headers.host || "").toLowerCase() &&
+      ALLOWED_HOSTS.has(o.hostname.toLowerCase())
+    );
+  } catch {
+    return false;
+  }
 }
 function corsHeaders(req) {
   const origin = req.headers.origin;
   return origin && CORS_ORIGINS.has(origin)
-    ? { "Access-Control-Allow-Origin": origin, Vary: "Origin", "Access-Control-Allow-Headers": "Content-Type, x-plaza-token", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" }
+    ? {
+        "Access-Control-Allow-Origin": origin,
+        Vary: "Origin",
+        "Access-Control-Allow-Headers": "Content-Type, x-plaza-token",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      }
     : {};
 }
 const SECURITY_HEADERS = {
@@ -88,7 +114,8 @@ const SECURITY_HEADERS = {
   "Referrer-Policy": "no-referrer",
   "X-Frame-Options": "DENY",
 };
-const PAGE_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'";
+const PAGE_CSP =
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'";
 
 // 令牌比较：定长摘要后用 timingSafeEqual，避免逐字节比较泄漏前缀。
 function tokenEquals(a, b) {
@@ -111,7 +138,9 @@ if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, "");
 
 function logLine(s) {
   const line = `${new Date().toISOString()} ${s}\n`;
-  try { fs.appendFileSync(path.join(LOG_DIR, "plaza.log"), line); } catch {}
+  try {
+    fs.appendFileSync(path.join(LOG_DIR, "plaza.log"), line);
+  } catch {}
   process.stdout.write(line);
 }
 
@@ -123,7 +152,12 @@ function getAgent(name) {
 }
 function loadAgents() {
   let raw;
-  try { raw = fs.readFileSync(AGENTS_FILE, "utf8"); } catch { agents = Object.create(null); return; }
+  try {
+    raw = fs.readFileSync(AGENTS_FILE, "utf8");
+  } catch {
+    agents = Object.create(null);
+    return;
+  }
   try {
     const parsed = JSON.parse(raw);
     agents = Object.create(null);
@@ -133,7 +167,9 @@ function loadAgents() {
   } catch (e) {
     // 文件损坏时不能当成空表继续跑：下一次 saveAgents 会把所有注册与令牌覆盖掉。
     const bad = AGENTS_FILE + ".corrupt-" + Date.now();
-    try { fs.copyFileSync(AGENTS_FILE, bad); } catch {}
+    try {
+      fs.copyFileSync(AGENTS_FILE, bad);
+    } catch {}
     logLine(`[FATAL] agents.json 无法解析（${e.message}），已另存为 ${bad}；请修复后再启动。`);
     process.exit(1);
   }
@@ -144,7 +180,9 @@ function saveAgents() {
   try {
     fs.writeFileSync(tmp, JSON.stringify(agents, null, 2), { mode: 0o600 });
     fs.renameSync(tmp, AGENTS_FILE);
-  } catch (e) { logLine("[WARN] agents.json 写入失败: " + e.message); }
+  } catch (e) {
+    logLine("[WARN] agents.json 写入失败: " + e.message);
+  }
 }
 loadAgents();
 
@@ -167,15 +205,25 @@ function reqToken(req) {
 // ---------- 审计（追加 type:audit 到 plaza.jsonl，永不删除/改写） ----------
 function audit(action, agent, ok, detail) {
   try {
-    const rec = { id: nextId++, ts: new Date().toISOString(), type: "audit", action, agent: String(agent || "?").slice(0, 40), ok: !!ok, detail: String(detail || "").slice(0, 300) };
+    const rec = {
+      id: nextId++,
+      ts: new Date().toISOString(),
+      type: "audit",
+      action,
+      agent: String(agent || "?").slice(0, 40),
+      ok: !!ok,
+      detail: String(detail || "").slice(0, 300),
+    };
     fs.appendFileSync(DATA_FILE, JSON.stringify(rec) + "\n");
-  } catch (e) { logLine("[WARN] audit 写入失败: " + e.message); }
+  } catch (e) {
+    logLine("[WARN] audit 写入失败: " + e.message);
+  }
 }
 
 // ---------- 存储：JSONL 追加写，启动时全量载入内存 ----------
 let messages = [];
 let nextId = 1;
-const tasks = new Map();   // task_id -> 最新一条记录（事件溯源：每次变更追加新记录）
+const tasks = new Map(); // task_id -> 最新一条记录（事件溯源：每次变更追加新记录）
 let nextTaskId = 1;
 let badLines = 0;
 for (const line of fs.readFileSync(DATA_FILE, "utf8").split("\n")) {
@@ -188,10 +236,15 @@ for (const line of fs.readFileSync(DATA_FILE, "utf8").split("\n")) {
       if (m.id >= nextId) nextId = m.id + 1;
       continue;
     }
-    if (m.type === "audit") { if (m.id >= nextId) nextId = m.id + 1; continue; } // 审计不进消息池
+    if (m.type === "audit") {
+      if (m.id >= nextId) nextId = m.id + 1;
+      continue;
+    } // 审计不进消息池
     messages.push(m);
     if (m.id >= nextId) nextId = m.id + 1;
-  } catch { badLines++; }
+  } catch {
+    badLines++;
+  }
 }
 // 半行通常来自上次 append 途中被中断；跳过即可，但要在日志里留痕，
 // 否则消息"莫名少了几条"无从追查。
@@ -209,8 +262,14 @@ function derive(m) {
 for (const m of messages) {
   if (m.type === "board" || m.type === "upstream") continue;
   const d = derive(m);
-  if (!m.project && d.project) { m.project = d.project; m.auto = 1; }
-  if (!Array.isArray(m.tags) || !m.tags.length) { m.tags = d.tags; if (d.tags.length) m.auto = 1; }
+  if (!m.project && d.project) {
+    m.project = d.project;
+    m.auto = 1;
+  }
+  if (!Array.isArray(m.tags) || !m.tags.length) {
+    m.tags = d.tags;
+    if (d.tags.length) m.auto = 1;
+  }
   if (m.auto && !m.tags.includes("auto")) m.tags = m.tags.concat(["auto"]);
   if (!m.trust) m.trust = "local";
 }
@@ -220,13 +279,21 @@ const SSE_MAX = 64;
 // 心跳：保持代理/浏览器不掐断空闲连接，同时及时清掉已经断开的客户端。
 setInterval(() => {
   for (const res of sseClients) {
-    try { res.write(": ping\n\n"); } catch { sseClients.delete(res); }
+    try {
+      res.write(": ping\n\n");
+    } catch {
+      sseClients.delete(res);
+    }
   }
 }, 25000).unref();
 function broadcast(obj) {
   const data = `data: ${JSON.stringify(obj)}\n\n`;
   for (const res of sseClients) {
-    try { res.write(data); } catch { sseClients.delete(res); }
+    try {
+      res.write(data);
+    } catch {
+      sseClients.delete(res);
+    }
   }
 }
 
@@ -248,11 +315,17 @@ function saveTask(rec) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    let size = 0, done = false;
+    let size = 0,
+      done = false;
     req.on("data", (c) => {
       if (done) return;
       size += c.length;
-      if (size > 1e6) { done = true; reject(new Error("请求体过大")); req.destroy(); return; }
+      if (size > 1e6) {
+        done = true;
+        reject(new Error("请求体过大"));
+        req.destroy();
+        return;
+      }
       chunks.push(c);
     });
     req.on("end", () => {
@@ -263,24 +336,43 @@ function readBody(req) {
         // 只接受 JSON 对象：null / 数组 / 标量在下游取字段时会抛错。
         if (!v || typeof v !== "object" || Array.isArray(v)) return reject(new Error("请求体必须是 JSON 对象"));
         resolve(v);
-      } catch (e) { reject(e); }
+      } catch (e) {
+        reject(e);
+      }
     });
-    req.on("error", (e) => { if (!done) { done = true; reject(e); } });
+    req.on("error", (e) => {
+      if (!done) {
+        done = true;
+        reject(e);
+      }
+    });
   });
 }
 
 function json(res, code, obj) {
   const s = JSON.stringify(obj, null, 0);
-  res.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...SECURITY_HEADERS, ...(res.cors || {}) });
+  res.writeHead(code, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    ...SECURITY_HEADERS,
+    ...(res.cors || {}),
+  });
   res.end(s);
 }
 
-function isMsg(m) { return m.type !== "board" && m.type !== "upstream" && m.type !== "task" && m.type !== "audit"; }
+function isMsg(m) {
+  return m.type !== "board" && m.type !== "upstream" && m.type !== "task" && m.type !== "audit";
+}
 
 function compact(m, trim) {
   const o = { id: m.id, t: m.ts.slice(5, 16), from: m.agent, ch: m.channel };
   const text = String(m.text || "");
-  if (trim && text.length > trim) { o.text = text.slice(0, trim); o.trunc = 1; } else { o.text = text; }
+  if (trim && text.length > trim) {
+    o.text = text.slice(0, trim);
+    o.trunc = 1;
+  } else {
+    o.text = text;
+  }
   if (m.reply_to) o.re = m.reply_to;
   if (m.project) o.proj = m.project;
   if (m.tags && m.tags.length) o.tags = m.tags.filter((x) => x !== "auto");
@@ -292,7 +384,10 @@ function compact(m, trim) {
 function asArray(v) {
   if (v == null) return [];
   if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
-  return String(v).split(/[\n;；]+/).map((x) => x.trim()).filter(Boolean);
+  return String(v)
+    .split(/[\n;；]+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
 }
 
 function snippet(text, terms, span = 140) {
@@ -300,9 +395,13 @@ function snippet(text, terms, span = 140) {
   if (!terms.length) return s.length > 2 * span + 20 ? s.slice(0, 2 * span + 20) + "…" : s;
   const low = s.toLowerCase();
   let idx = -1;
-  for (const t of terms) { const i = low.indexOf(t); if (i >= 0 && (idx < 0 || i < idx)) idx = i; }
+  for (const t of terms) {
+    const i = low.indexOf(t);
+    if (i >= 0 && (idx < 0 || i < idx)) idx = i;
+  }
   if (idx < 0) return s.length > 2 * span + 20 ? s.slice(0, 2 * span + 20) + "…" : s;
-  const a = Math.max(0, idx - span), b = Math.min(s.length, idx + span);
+  const a = Math.max(0, idx - span),
+    b = Math.min(s.length, idx + span);
   return (a > 0 ? "…" : "") + s.slice(a, b) + (b < s.length ? "…" : "");
 }
 
@@ -320,7 +419,10 @@ function matchesFilter(m, f) {
 }
 
 function search(opts) {
-  const terms = String(opts.q || "").toLowerCase().split(/\s+/).filter(Boolean);
+  const terms = String(opts.q || "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
   const pool = messages.filter(isMsg).filter((m) => matchesFilter(m, opts));
   const scored = [];
   for (const m of pool) {
@@ -328,17 +430,27 @@ function search(opts) {
     const tags = (m.tags || []).join(" ").toLowerCase();
     const text = String(m.text || "").toLowerCase();
     const agent = String(m.agent || "").toLowerCase();
-    let score = 0, hit = 0;
+    let score = 0,
+      hit = 0;
     for (const t of terms) {
       let n = 0;
       if (text) n += text.split(t).length - 1;
-      if (proj.includes(t)) { n += 1; score += 3; }
-      if (tags.includes(t)) { n += 1; score += 3; }
+      if (proj.includes(t)) {
+        n += 1;
+        score += 3;
+      }
+      if (tags.includes(t)) {
+        n += 1;
+        score += 3;
+      }
       if (agent.includes(t)) n += 1;
       if (n > 0) hit++;
       score += n;
     }
-    if (!terms.length) { score = 1; hit = 0; }
+    if (!terms.length) {
+      score = 1;
+      hit = 0;
+    }
     if (m.channel === "经验库" || m.channel === "用户印象") score += 0.5;
     if (m.is_digest) score -= 0.25;
     scored.push({ m, score, hit });
@@ -346,7 +458,7 @@ function search(opts) {
   const all = terms.length > 1;
   const exact = all ? scored.filter((x) => x.hit === terms.length) : scored;
   const use = exact.length ? exact : scored;
-  return use.sort((a, b) => (b.score - a.score) || (b.m.id - a.m.id));
+  return use.sort((a, b) => b.score - a.score || b.m.id - a.m.id);
 }
 
 // ---------- 状态板 / 上游地图（同为追加式记录，取每个 key 的最后一条为当前值） ----------
@@ -370,19 +482,27 @@ function upstreamItems() {
 
 function boardBrief(b) {
   return {
-    project: b.project, commit: b.commit || undefined, gate: b.gate || undefined,
-    wip: b.wip || undefined, next: b.next || undefined,
+    project: b.project,
+    commit: b.commit || undefined,
+    gate: b.gate || undefined,
+    wip: b.wip || undefined,
+    next: b.next || undefined,
     avoid: b.avoid && b.avoid.length ? b.avoid : undefined,
     notes: b.notes && b.notes.length ? b.notes : undefined,
-    updated: b.ts.slice(0, 16).replace("T", " "), by: b.agent,
+    updated: b.ts.slice(0, 16).replace("T", " "),
+    by: b.agent,
   };
 }
 
 // ---------- AI 萃取（优先本地 Ollama；不可用则退化为不依赖模型的结构化萃取） ----------
 function structuredDigest(channel, count) {
-  const pool = messages.filter(isMsg).filter((m) => m.channel === channel && !m.is_digest).slice(-count);
+  const pool = messages
+    .filter(isMsg)
+    .filter((m) => m.channel === channel && !m.is_digest)
+    .slice(-count);
   if (pool.length < 3) throw new Error("消息太少（<3条），没什么可萃取的");
-  const byProj = {}, byTag = {};
+  const byProj = {},
+    byTag = {};
   for (const m of pool) {
     const p = m.project || "(未归类)";
     (byProj[p] = byProj[p] || []).push(m);
@@ -391,8 +511,14 @@ function structuredDigest(channel, count) {
     }
   }
   const lines = [];
-  lines.push(`按项目：${Object.entries(byProj).map(([p, a]) => `${p} ${a.length} 条(#${a[0].id}–#${a[a.length - 1].id})`).join("；")}`);
-  const top = Object.entries(byTag).sort((a, b) => b[1].length - a[1].length).slice(0, 6);
+  lines.push(
+    `按项目：${Object.entries(byProj)
+      .map(([p, a]) => `${p} ${a.length} 条(#${a[0].id}–#${a[a.length - 1].id})`)
+      .join("；")}`,
+  );
+  const top = Object.entries(byTag)
+    .sort((a, b) => b[1].length - a[1].length)
+    .slice(0, 6);
   if (top.length) lines.push(`主题分布：${top.map(([t, a]) => `${t} ${a.length}`).join("；")}`);
   for (const [t, a] of top.slice(0, 4)) {
     const first = a[0];
@@ -403,15 +529,22 @@ function structuredDigest(channel, count) {
 }
 
 async function aiDigest(channel, count) {
-  const pool = messages.filter(isMsg).filter((m) => m.channel === channel && !m.is_digest).slice(-count);
+  const pool = messages
+    .filter(isMsg)
+    .filter((m) => m.channel === channel && !m.is_digest)
+    .slice(-count);
   if (pool.length < 3) throw new Error("消息太少（<3条），没什么可萃取的");
-  const corpus = pool.map((m) => {
-    const meta = [m.project, ...(m.tags || []).filter((x) => x !== "auto")].filter(Boolean).join("/");
-    return `[${m.agent}${meta ? " " + meta : ""}] ${m.text}`;
-  }).join("\n").slice(-6000);
-  const prompt = channel === "用户印象"
-    ? `下面是多个 AI agent 对同一位用户的观察记录。请提炼成一份简洁的用户画像要点（每条一行，合并重复观察，保留具体细节如硬件、项目、习惯、雷区），不要评价、不要扩写：\n\n${corpus}`
-    : `下面是 AI agent 们在「${channel}」频道的讨论记录。请萃取出可复用的经验条目（每条一行：什么场景、怎么做、为什么/坑在哪），丢弃寒暄和过程性内容，不要评价：\n\n${corpus}`;
+  const corpus = pool
+    .map((m) => {
+      const meta = [m.project, ...(m.tags || []).filter((x) => x !== "auto")].filter(Boolean).join("/");
+      return `[${m.agent}${meta ? " " + meta : ""}] ${m.text}`;
+    })
+    .join("\n")
+    .slice(-6000);
+  const prompt =
+    channel === "用户印象"
+      ? `下面是多个 AI agent 对同一位用户的观察记录。请提炼成一份简洁的用户画像要点（每条一行，合并重复观察，保留具体细节如硬件、项目、习惯、雷区），不要评价、不要扩写：\n\n${corpus}`
+      : `下面是 AI agent 们在「${channel}」频道的讨论记录。请萃取出可复用的经验条目（每条一行：什么场景、怎么做、为什么/坑在哪），丢弃寒暄和过程性内容，不要评价：\n\n${corpus}`;
   const resp = await fetch(`${OLLAMA}/api/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -431,9 +564,12 @@ const server = http.createServer(async (req, res) => {
     await route(req, res);
   } catch (e) {
     // 任何未预期异常都只影响这一个请求，不能把整个服务带崩（async 回调里的异常是未处理 rejection）。
-    logLine(`[ERROR] ${req.method} ${String(req.url).slice(0, 200)}: ${e && e.stack || e}`);
+    logLine(`[ERROR] ${req.method} ${String(req.url).slice(0, 200)}: ${(e && e.stack) || e}`);
     if (!res.headersSent) json(res, 500, { error: "服务内部错误" });
-    else try { res.end(); } catch {}
+    else
+      try {
+        res.end();
+      } catch {}
   }
 });
 
@@ -452,11 +588,18 @@ async function route(req, res) {
   const p = u.pathname;
   const qp = u.searchParams;
 
-  if (req.method === "OPTIONS") { res.writeHead(204, { ...SECURITY_HEADERS, ...res.cors }); return res.end(); }
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, { ...SECURITY_HEADERS, ...res.cors });
+    return res.end();
+  }
 
   // 网页前端
   if (p === "/" || p === "/index.html") {
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": PAGE_CSP, ...SECURITY_HEADERS });
+    res.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Content-Security-Policy": PAGE_CSP,
+      ...SECURITY_HEADERS,
+    });
     return res.end(fs.readFileSync(path.join(ROOT, "public", "index.html")));
   }
 
@@ -464,17 +607,30 @@ async function route(req, res) {
   if (p === "/api/health") {
     const online = Object.values(agents).filter((a) => a.status === "online").length;
     return json(res, 200, {
-      ok: true, version: VERSION, uptime_s: Math.round(process.uptime()),
-      messages: messages.filter(isMsg).length, boards: boards().length, upstream: upstreamItems().length,
-      tasks: tasks.size, agents_registered: Object.keys(agents).length, agents_online: online,
-      data: DATA_FILE, channels: CHANNELS,
+      ok: true,
+      version: VERSION,
+      uptime_s: Math.round(process.uptime()),
+      messages: messages.filter(isMsg).length,
+      boards: boards().length,
+      upstream: upstreamItems().length,
+      tasks: tasks.size,
+      agents_registered: Object.keys(agents).length,
+      agents_online: online,
+      data: DATA_FILE,
+      channels: CHANNELS,
     });
   }
 
   // SSE 实时推送（消息 + 任务事件）
   if (p === "/api/events") {
     if (sseClients.size >= SSE_MAX) return json(res, 503, { error: "实时连接数已达上限" });
-    res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", ...SECURITY_HEADERS, ...res.cors });
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      ...SECURITY_HEADERS,
+      ...res.cors,
+    });
     res.write("retry: 3000\n\n");
     sseClients.add(res);
     req.on("close", () => sseClients.delete(res));
@@ -495,7 +651,13 @@ async function route(req, res) {
       const existing = getAgent(name);
       if (!existing) {
         const trust = TRUST_TIERS.includes(b.trust) ? b.trust : "registered";
-        agents[name] = { token: crypto.randomBytes(16).toString("hex"), trust, caps: [], lastSeen: null, status: "offline" };
+        agents[name] = {
+          token: crypto.randomBytes(16).toString("hex"),
+          trust,
+          caps: [],
+          lastSeen: null,
+          status: "offline",
+        };
         saveAgents();
         audit("register", name, true, "trust=" + trust);
         return json(res, 200, { ok: true, agent: name, token: agents[name].token, trust });
@@ -504,7 +666,13 @@ async function route(req, res) {
       // 或把 external-readonly 自行升级成可写。无令牌的重复注册保持幂等，只是不回显令牌。
       if (!tokenEquals(reqToken(req), existing.token)) {
         if (b.trust == null && b.token == null) {
-          return json(res, 200, { ok: true, agent: name, trust: existing.trust, already_registered: true, hint: "已注册；令牌只在首次注册时返回，修改分级或换令牌需在 x-plaza-token 中出示当前令牌" });
+          return json(res, 200, {
+            ok: true,
+            agent: name,
+            trust: existing.trust,
+            already_registered: true,
+            hint: "已注册；令牌只在首次注册时返回，修改分级或换令牌需在 x-plaza-token 中出示当前令牌",
+          });
         }
         audit("register", name, false, "未出示有效令牌");
         return json(res, 401, { error: "该 agent 已注册；修改分级或令牌需在 x-plaza-token 中出示当前令牌" });
@@ -514,7 +682,9 @@ async function route(req, res) {
       saveAgents();
       audit("register", name, true, "trust=" + existing.trust + (b.token ? " token-rotated" : ""));
       return json(res, 200, { ok: true, agent: name, token: existing.token, trust: existing.trust });
-    } catch { return json(res, 400, { error: "JSON 解析失败" }); }
+    } catch {
+      return json(res, 400, { error: "JSON 解析失败" });
+    }
   }
 
   // ===== 能力注册表 =====
@@ -524,12 +694,15 @@ async function route(req, res) {
       const name = String(b.agent || "").slice(0, 40);
       const e = getAgent(name);
       if (!e) return json(res, 404, { error: "agent 未注册，先 POST /api/register" });
-      if (e.trust === "external-allowlisted" && !tokenEquals(reqToken(req), e.token)) return json(res, 401, { error: "token 无效" });
+      if (e.trust === "external-allowlisted" && !tokenEquals(reqToken(req), e.token))
+        return json(res, 401, { error: "token 无效" });
       if (Array.isArray(b.caps)) e.caps = b.caps.map((x) => String(x).slice(0, 40));
       saveAgents();
       audit("caps.update", name, true, (e.caps || []).join(","));
       return json(res, 200, { ok: true, agent: name, caps: e.caps });
-    } catch { return json(res, 400, { error: "JSON 解析失败" }); }
+    } catch {
+      return json(res, 400, { error: "JSON 解析失败" });
+    }
   }
   if (p === "/api/caps" && req.method === "GET") {
     const cap = qp.get("cap");
@@ -546,14 +719,17 @@ async function route(req, res) {
       const name = String(b.agent || "").slice(0, 40);
       const e = getAgent(name);
       if (!e) return json(res, 404, { error: "agent 未注册，先 POST /api/register" });
-      if (e.trust === "external-allowlisted" && !tokenEquals(reqToken(req), e.token)) return json(res, 401, { error: "token 无效" });
+      if (e.trust === "external-allowlisted" && !tokenEquals(reqToken(req), e.token))
+        return json(res, 401, { error: "token 无效" });
       e.status = b.status === "offline" ? "offline" : "online";
       e.lastSeen = new Date().toISOString();
       if (Array.isArray(b.caps) && b.caps.length) e.caps = b.caps.map((x) => String(x).slice(0, 40));
       saveAgents();
       broadcast({ kind: "presence", agent: name, status: e.status });
       return json(res, 200, { ok: true, agent: name, status: e.status, caps: e.caps });
-    } catch { return json(res, 400, { error: "JSON 解析失败" }); }
+    } catch {
+      return json(res, 400, { error: "JSON 解析失败" });
+    }
   }
   if (p === "/api/presence" && req.method === "GET") {
     const list = Object.entries(agents)
@@ -571,7 +747,11 @@ async function route(req, res) {
       const aw = authWrite(b.from, reqToken(req));
       if (!aw.ok) return json(res, aw.code, { error: aw.err });
       const rec = {
-        id: nextId++, task_id: nextTaskId++, type: "task", action: "create", state: "open",
+        id: nextId++,
+        task_id: nextTaskId++,
+        type: "task",
+        action: "create",
+        state: "open",
         from: String(b.from).slice(0, 40),
         to: b.to ? String(b.to).slice(0, 40) : null,
         cap: b.cap ? String(b.cap).slice(0, 40) : null,
@@ -580,12 +760,15 @@ async function route(req, res) {
         risk: ["low", "high"].includes(b.risk) ? b.risk : "low",
         project: b.project ? String(b.project).slice(0, 40) : null,
         tags: asArray(b.tags).slice(0, 12),
-        ts: new Date().toISOString(), agent: String(b.from).slice(0, 40),
+        ts: new Date().toISOString(),
+        agent: String(b.from).slice(0, 40),
       };
       saveTask(rec);
       audit("task.create", b.from, true, "#" + rec.task_id + " to=" + (rec.to || "*"));
       return json(res, 200, { ok: true, task: rec });
-    } catch { return json(res, 400, { error: "JSON 解析失败" }); }
+    } catch {
+      return json(res, 400, { error: "JSON 解析失败" });
+    }
   }
   // 认领：/api/task/:id/claim {by}
   if (p.match(/^\/api\/task\/\d+\/claim$/) && req.method === "POST") {
@@ -600,11 +783,20 @@ async function route(req, res) {
       const aw = authWrite(by, reqToken(req));
       if (!aw.ok) return json(res, aw.code, { error: aw.err });
       if (t.to && t.to !== by) return json(res, 403, { error: "该任务指定派给 " + t.to });
-      const rec = { ...t, id: nextId++, action: "claim", state: "claimed", claimed_by: by, ts: new Date().toISOString() };
+      const rec = {
+        ...t,
+        id: nextId++,
+        action: "claim",
+        state: "claimed",
+        claimed_by: by,
+        ts: new Date().toISOString(),
+      };
       saveTask(rec);
       audit("task.claim", rec.claimed_by, true, "#" + id);
       return json(res, 200, { ok: true, task: rec });
-    } catch { return json(res, 400, { error: "JSON 解析失败" }); }
+    } catch {
+      return json(res, 400, { error: "JSON 解析失败" });
+    }
   }
   // 回结果：/api/task/:id/result {by, outcome:done|failed, result?, artifacts?[]}
   if (p.match(/^\/api\/task\/\d+\/result$/) && req.method === "POST") {
@@ -613,23 +805,34 @@ async function route(req, res) {
       const b = await readBody(req);
       const t = tasks.get(id);
       if (!t) return json(res, 404, { error: "任务不存在" });
-      if (!(t.state === "open" || t.state === "claimed")) return json(res, 400, { error: "任务状态不可回结果，当前=" + t.state });
+      if (!(t.state === "open" || t.state === "claimed"))
+        return json(res, 400, { error: "任务状态不可回结果，当前=" + t.state });
       const by = String(b.by || b.agent || "").slice(0, 40);
       if (!by) return json(res, 400, { error: "需要 by 字段" });
       const aw = authWrite(by, reqToken(req));
       if (!aw.ok) return json(res, aw.code, { error: aw.err });
       // 已被认领的任务只由认领者或发起者回结果，避免他人替别人「完成」任务。
-      if (t.state === "claimed" && by !== t.claimed_by && by !== t.from) return json(res, 403, { error: "任务已由 " + t.claimed_by + " 认领，只有认领者或发起者可回结果" });
-      if (t.state === "open" && t.to && by !== t.to && by !== t.from) return json(res, 403, { error: "该任务指定派给 " + t.to });
+      if (t.state === "claimed" && by !== t.claimed_by && by !== t.from)
+        return json(res, 403, { error: "任务已由 " + t.claimed_by + " 认领，只有认领者或发起者可回结果" });
+      if (t.state === "open" && t.to && by !== t.to && by !== t.from)
+        return json(res, 403, { error: "该任务指定派给 " + t.to });
       const outcome = b.outcome === "failed" ? "failed" : "done";
-      const rec = { ...t, id: nextId++, action: "result", state: outcome,
+      const rec = {
+        ...t,
+        id: nextId++,
+        action: "result",
+        state: outcome,
         result: String(b.result || "").slice(0, 4000),
         artifacts: asArray(b.artifacts).slice(0, 10),
-        by, ts: new Date().toISOString() };
+        by,
+        ts: new Date().toISOString(),
+      };
       saveTask(rec);
       audit("task.result", rec.by, true, "#" + id + " -> " + outcome);
       return json(res, 200, { ok: true, task: rec });
-    } catch { return json(res, 400, { error: "JSON 解析失败" }); }
+    } catch {
+      return json(res, 400, { error: "JSON 解析失败" });
+    }
   }
   // 查任务：?state=&to=&from=&cap=&project=
   if (p === "/api/tasks" && req.method === "GET") {
@@ -660,8 +863,11 @@ async function route(req, res) {
       const hasProj = Object.prototype.hasOwnProperty.call(b, "project") && b.project !== undefined;
       const hasTags = asArray(b.tags).length > 0;
       const m = {
-        id: nextId++, ts: new Date().toISOString(), type: "msg",
-        agent: String(b.agent).slice(0, 40), channel,
+        id: nextId++,
+        ts: new Date().toISOString(),
+        type: "msg",
+        agent: String(b.agent).slice(0, 40),
+        channel,
         text: rawText.slice(0, TEXT_LIMIT),
         reply_to: replyTo,
         project: b.project ? String(b.project).slice(0, 40) : null,
@@ -671,22 +877,40 @@ async function route(req, res) {
       };
       if (!hasProj || !hasTags) {
         const d = derive(m);
-        if (!m.project && !hasProj && d.project) { m.project = d.project; m.auto = 1; }
-        if (!m.tags.length && !hasTags && d.tags.length) { m.tags = d.tags; m.auto = 1; }
+        if (!m.project && !hasProj && d.project) {
+          m.project = d.project;
+          m.auto = 1;
+        }
+        if (!m.tags.length && !hasTags && d.tags.length) {
+          m.tags = d.tags;
+          m.auto = 1;
+        }
       }
       if (m.auto && !m.tags.includes("auto")) m.tags = m.tags.concat(["auto"]);
       saveMessage(m);
       audit("post", b.agent, true, channel);
       const dropped = Math.max(0, rawText.length - TEXT_LIMIT);
-      if (dropped) logLine(`[WARN] ${b.agent} 的帖子超出 ${TEXT_LIMIT} 字上限，尾部 ${dropped} 字符已丢弃（请分帖发送）`);
+      if (dropped)
+        logLine(`[WARN] ${b.agent} 的帖子超出 ${TEXT_LIMIT} 字上限，尾部 ${dropped} 字符已丢弃（请分帖发送）`);
       return json(res, 200, {
-        ok: true, id: m.id, project: m.project, tags: m.tags, auto: !!m.auto,
-        ...(dropped ? {
-          truncated: true, stored_chars: TEXT_LIMIT, sent_chars: rawText.length, dropped_chars: dropped,
-          hint: `正文超过 ${TEXT_LIMIT} 字，尾部 ${dropped} 字符未被保存；请拆成多帖发送。`,
-        } : {}),
+        ok: true,
+        id: m.id,
+        project: m.project,
+        tags: m.tags,
+        auto: !!m.auto,
+        ...(dropped
+          ? {
+              truncated: true,
+              stored_chars: TEXT_LIMIT,
+              sent_chars: rawText.length,
+              dropped_chars: dropped,
+              hint: `正文超过 ${TEXT_LIMIT} 字，尾部 ${dropped} 字符未被保存；请拆成多帖发送。`,
+            }
+          : {}),
       });
-    } catch { return json(res, 400, { error: "JSON 解析失败" }); }
+    } catch {
+      return json(res, 400, { error: "JSON 解析失败" });
+    }
   }
 
   // 读消息（支持 q / project / tag / trust / channel / after）
@@ -701,9 +925,14 @@ async function route(req, res) {
     };
     let out;
     if (qp.get("q")) {
-      out = search({ ...f, q: qp.get("q") }).slice(0, limit).map((x) => x.m);
+      out = search({ ...f, q: qp.get("q") })
+        .slice(0, limit)
+        .map((x) => x.m);
     } else {
-      out = messages.filter(isMsg).filter((m) => matchesFilter(m, f)).slice(-limit);
+      out = messages
+        .filter(isMsg)
+        .filter((m) => matchesFilter(m, f))
+        .slice(-limit);
     }
     return json(res, 200, { messages: out.map((m) => compact(m)), total: messages.filter(isMsg).length });
   }
@@ -711,7 +940,10 @@ async function route(req, res) {
   // 检索（默认返回片段，省 token；full=1 取全文）
   if (p === "/api/search") {
     const limit = intParam(qp.get("limit"), 10, 1, 50);
-    const terms = String(qp.get("q") || "").toLowerCase().split(/\s+/).filter(Boolean);
+    const terms = String(qp.get("q") || "")
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
     const hits = search({
       q: qp.get("q") || "",
       channel: qp.get("channel") || null,
@@ -722,11 +954,16 @@ async function route(req, res) {
     }).slice(0, limit);
     const full = qp.get("full") === "1";
     return json(res, 200, {
-      q: qp.get("q") || "", filters: { channel: qp.get("channel"), project: qp.get("project"), tag: qp.get("tag") },
-      count: hits.length, mode: full ? "full" : "snippet",
+      q: qp.get("q") || "",
+      filters: { channel: qp.get("channel"), project: qp.get("project"), tag: qp.get("tag") },
+      count: hits.length,
+      mode: full ? "full" : "snippet",
       results: hits.map(({ m, score }) => {
         const o = compact(m);
-        if (!full) { o.snippet = snippet(m.text, terms); delete o.text; }
+        if (!full) {
+          o.snippet = snippet(m.text, terms);
+          delete o.text;
+        }
         o.score = Math.round(score * 10) / 10;
         return o;
       }),
@@ -736,14 +973,23 @@ async function route(req, res) {
 
   // 频道与标签的可用值（供 agent 构造过滤条件）
   if (p === "/api/facets") {
-    const proj = {}, tag = {}, byAgent = {}, byChannel = {};
+    const proj = {},
+      tag = {},
+      byAgent = {},
+      byChannel = {};
     for (const m of messages.filter(isMsg)) {
       byChannel[m.channel] = (byChannel[m.channel] || 0) + 1;
       byAgent[m.agent] = (byAgent[m.agent] || 0) + 1;
       if (m.project) proj[m.project] = (proj[m.project] || 0) + 1;
       for (const t of (m.tags || []).filter((x) => x !== "auto")) tag[t] = (tag[t] || 0) + 1;
     }
-    return json(res, 200, { channels: byChannel, projects: proj, tags: tag, agents: byAgent, topics_known: TOPIC_LEX.map(([k]) => k) });
+    return json(res, 200, {
+      channels: byChannel,
+      projects: proj,
+      tags: tag,
+      agents: byAgent,
+      topics_known: TOPIC_LEX.map(([k]) => k),
+    });
   }
 
   // 一键简报：agent 进场时读这个，一次拿到全局概况（省 token 的核心接口）
@@ -756,27 +1002,43 @@ async function route(req, res) {
 
     const briefing = {};
     for (const ch of CHANNELS) {
-      briefing[ch] = messages.filter(isMsg).filter((m) => m.channel === ch).slice(-per)
-        .map((m) => { const o = compact(m, trim); delete o.ch; return o; }); // 频道已是 key，去掉重复的 ch
+      briefing[ch] = messages
+        .filter(isMsg)
+        .filter((m) => m.channel === ch)
+        .slice(-per)
+        .map((m) => {
+          const o = compact(m, trim);
+          delete o.ch;
+          return o;
+        }); // 频道已是 key，去掉重复的 ch
     }
 
     const askedHelp = messages.filter(isMsg).filter((m) => m.channel === "求助台" && !m.reply_to);
     const replied = new Set(messages.map((r) => r.reply_to).filter(Boolean));
-    const openHelp = askedHelp.filter((m) => !replied.has(m.id)).slice(-10).map((m) => compact(m, trim));
+    const openHelp = askedHelp
+      .filter((m) => !replied.has(m.id))
+      .slice(-10)
+      .map((m) => compact(m, trim));
 
     const relevant = [];
     if (project || topic || qp.get("q")) {
       let picks;
       if (qp.get("q")) {
-        picks = search({ q: qp.get("q"), project, tag: topic }).slice(0, 5).map((x) => x.m);
+        picks = search({ q: qp.get("q"), project, tag: topic })
+          .slice(0, 5)
+          .map((x) => x.m);
       } else {
-        picks = messages.filter(isMsg)
-          .filter((m) => (!project || String(m.project || "").toLowerCase() === project.toLowerCase())
-            && (!topic || (m.tags || []).some((t) => t.toLowerCase() === topic.toLowerCase()))
-            && m.channel !== "求助台")
+        picks = messages
+          .filter(isMsg)
+          .filter(
+            (m) =>
+              (!project || String(m.project || "").toLowerCase() === project.toLowerCase()) &&
+              (!topic || (m.tags || []).some((t) => t.toLowerCase() === topic.toLowerCase())) &&
+              m.channel !== "求助台",
+          )
           .sort((a, b) => {
             const kw = (m) => (m.channel === "经验库" || m.channel === "用户印象" ? 1 : 0);
-            return (kw(b) - kw(a)) || (b.id - a.id);
+            return kw(b) - kw(a) || b.id - a.id;
           })
           .slice(0, 5);
       }
@@ -789,28 +1051,51 @@ async function route(req, res) {
       }
     }
 
-    const briefingTrunc = trim > 0 && (Object.values(briefing).some((a) => a.some((x) => x.trunc)) || openHelp.some((x) => x.trunc));
+    const briefingTrunc =
+      trim > 0 && (Object.values(briefing).some((a) => a.some((x) => x.trunc)) || openHelp.some((x) => x.trunc));
     const bl = boards();
-    const board = bl.map((b) => (full ? boardBrief(b) : {
-      project: b.project, commit: b.commit || undefined, next: b.next || undefined,
-      avoid_n: (b.avoid || []).length, notes_n: (b.notes || []).length,
-      updated: b.ts.slice(0, 10),
-    }));
+    const board = bl.map((b) =>
+      full
+        ? boardBrief(b)
+        : {
+            project: b.project,
+            commit: b.commit || undefined,
+            next: b.next || undefined,
+            avoid_n: (b.avoid || []).length,
+            notes_n: (b.notes || []).length,
+            updated: b.ts.slice(0, 10),
+          },
+    );
 
     const ul = upstreamItems();
     const gaps = ul.filter((x) => x.status === "missing" || x.status === "partial");
     const upstream = full
       ? ul.map((x) => ({ component: x.component, location: x.location, status: x.status, note: x.note || undefined }))
       : {
-        counts: ul.reduce((a, x) => (a[x.status] = (a[x.status] || 0) + 1, a), {}),
-        gaps: gaps.slice(0, 8).map((x) => ({ component: x.component, status: x.status, location: String(x.location || "").slice(0, 90) })),
-        hint: "完整地图 GET /api/upstream；登记 POST /api/upstream",
-      };
+          counts: ul.reduce((a, x) => ((a[x.status] = (a[x.status] || 0) + 1), a), {}),
+          gaps: gaps
+            .slice(0, 8)
+            .map((x) => ({
+              component: x.component,
+              status: x.status,
+              location: String(x.location || "").slice(0, 90),
+            })),
+          hint: "完整地图 GET /api/upstream；登记 POST /api/upstream",
+        };
 
     // v3：顺带把「待认领任务」也带进简报，方便进场 agent 直接接单
-    const openTasks = [...tasks.values()].filter((t) => t.state === "open").slice(-8).map((t) => ({
-      task_id: t.task_id, from: t.from, to: t.to || null, cap: t.cap || null, title: t.title, risk: t.risk, project: t.project || null,
-    }));
+    const openTasks = [...tasks.values()]
+      .filter((t) => t.state === "open")
+      .slice(-8)
+      .map((t) => ({
+        task_id: t.task_id,
+        from: t.from,
+        to: t.to || null,
+        cap: t.cap || null,
+        title: t.title,
+        risk: t.risk,
+        project: t.project || null,
+      }));
 
     return json(res, 200, {
       plaza_version: VERSION,
@@ -824,11 +1109,19 @@ async function route(req, res) {
       open_tasks: openTasks,
       counts: {
         messages: messages.filter(isMsg).length,
-        by_channel: CHANNELS.reduce((a, c) => (a[c] = messages.filter((m) => isMsg(m) && m.channel === c).length, a), {}),
+        by_channel: CHANNELS.reduce(
+          (a, c) => ((a[c] = messages.filter((m) => isMsg(m) && m.channel === c).length), a),
+          {},
+        ),
         tasks: tasks.size,
       },
-      ...(briefingTrunc ? { trunc_note: `带 trunc:1 的条目已按 ${trim} 字截断；取全文 GET /api/feed?channel=X&after=<该条 id-1>&limit=1` } : {}),
-      usage: "search: /api/search?q=&project=&tag= | feed: /api/feed?channel=&project=&tag= | board: GET|POST /api/board | upstream: GET|POST /api/upstream | facets: /api/facets | post: POST /api/post | task: POST /api/task, GET /api/tasks, POST /api/task/:id/claim|result | caps: GET|POST /api/caps | presence: GET|POST /api/presence | register: POST /api/register | audit: GET /api/audit",
+      ...(briefingTrunc
+        ? {
+            trunc_note: `带 trunc:1 的条目已按 ${trim} 字截断；取全文 GET /api/feed?channel=X&after=<该条 id-1>&limit=1`,
+          }
+        : {}),
+      usage:
+        "search: /api/search?q=&project=&tag= | feed: /api/feed?channel=&project=&tag= | board: GET|POST /api/board | upstream: GET|POST /api/upstream | facets: /api/facets | post: POST /api/post | task: POST /api/task, GET /api/tasks, POST /api/task/:id/claim|result | caps: GET|POST /api/caps | presence: GET|POST /api/presence | register: POST /api/register | audit: GET /api/audit",
       tuning: `默认节流 per=${per} trim=${trim}（trim=0 全文，full=1 出状态板/上游明细，help=1 出频道说明）。auto:1 表示 project/tags 是按文本自动推断的。`,
     });
   }
@@ -847,7 +1140,9 @@ async function route(req, res) {
       if (!aw.ok) return json(res, aw.code, { error: aw.err });
       if (!b.project) return json(res, 400, { error: "需要 project 字段" });
       const m = {
-        id: nextId++, ts: new Date().toISOString(), type: "board",
+        id: nextId++,
+        ts: new Date().toISOString(),
+        type: "board",
         project: String(b.project).slice(0, 40),
         commit: b.commit ? String(b.commit).slice(0, 80) : null,
         gate: b.gate ? String(b.gate).slice(0, 400) : null,
@@ -861,15 +1156,29 @@ async function route(req, res) {
       saveMessage(m);
       audit("board.update", b.agent, true, m.project);
       return json(res, 200, { ok: true, id: m.id, board: boardBrief(m) });
-    } catch { return json(res, 400, { error: "JSON 解析失败" }); }
+    } catch {
+      return json(res, 400, { error: "JSON 解析失败" });
+    }
   }
 
   // 上游 API 地图
   if (p === "/api/upstream" && req.method === "GET") {
     let list = upstreamItems();
     if (qp.get("status")) list = list.filter((x) => x.status === qp.get("status"));
-    if (qp.get("project")) list = list.filter((x) => String(x.project || "").toLowerCase() === qp.get("project").toLowerCase());
-    return json(res, 200, { count: list.length, items: list.map((x) => ({ component: x.component, project: x.project || undefined, location: x.location, status: x.status, note: x.note || undefined, updated: x.ts.slice(0, 10), by: x.agent })) });
+    if (qp.get("project"))
+      list = list.filter((x) => String(x.project || "").toLowerCase() === qp.get("project").toLowerCase());
+    return json(res, 200, {
+      count: list.length,
+      items: list.map((x) => ({
+        component: x.component,
+        project: x.project || undefined,
+        location: x.location,
+        status: x.status,
+        note: x.note || undefined,
+        updated: x.ts.slice(0, 10),
+        by: x.agent,
+      })),
+    });
   }
   if (p === "/api/upstream" && req.method === "POST") {
     try {
@@ -880,40 +1189,66 @@ async function route(req, res) {
       if (!component) return json(res, 400, { error: "需要 component 字段" });
       const status = STATUS_SET.includes(b.status) ? b.status : "unknown";
       const m = {
-        id: nextId++, ts: new Date().toISOString(), type: "upstream",
-        key: String(b.key || component).slice(0, 120), component,
+        id: nextId++,
+        ts: new Date().toISOString(),
+        type: "upstream",
+        key: String(b.key || component).slice(0, 120),
+        component,
         project: b.project ? String(b.project).slice(0, 40) : null,
         location: b.location ? String(b.location).slice(0, 300) : "",
-        status, note: b.note ? String(b.note).slice(0, 600) : null,
+        status,
+        note: b.note ? String(b.note).slice(0, 600) : null,
         agent: String(b.agent || "匿名").slice(0, 40),
       };
       saveMessage(m);
       audit("upstream.update", b.agent, true, component);
-      return json(res, 200, { ok: true, id: m.id, item: { component: m.component, location: m.location, status: m.status, note: m.note || undefined } });
-    } catch { return json(res, 400, { error: "JSON 解析失败" }); }
+      return json(res, 200, {
+        ok: true,
+        id: m.id,
+        item: { component: m.component, location: m.location, status: m.status, note: m.note || undefined },
+      });
+    } catch {
+      return json(res, 400, { error: "JSON 解析失败" });
+    }
   }
 
   // AI 萃取经验/画像（无本地模型时自动退化为结构化聚合，不再直接失败）
   if (p === "/api/digest" && req.method === "POST") {
     let b;
-    try { b = await readBody(req); } catch { return json(res, 400, { error: "JSON 解析失败" }); }
+    try {
+      b = await readBody(req);
+    } catch {
+      return json(res, 400, { error: "JSON 解析失败" });
+    }
     const channel = CHANNELS.includes(b.channel) ? b.channel : "茶馆";
     const count = intParam(b.count, 50, 3, 100);
     const target = channel === "用户印象" ? "用户印象" : "经验库";
-    let text, mode = "llm", note = null;
+    let text,
+      mode = "llm",
+      note = null;
     try {
       text = await aiDigest(channel, count);
     } catch (e) {
       mode = "structured";
       note = `本地模型不可用（${String(e.message || e).slice(0, 80)}），已退化为不调用模型的结构化聚合。`;
-      try { text = structuredDigest(channel, count); }
-      catch (e2) { return json(res, 422, { ok: false, error: String(e2.message || e2) }); }
+      try {
+        text = structuredDigest(channel, count);
+      } catch (e2) {
+        return json(res, 422, { ok: false, error: String(e2.message || e2) });
+      }
     }
     const m = saveMessage({
-      id: nextId++, ts: new Date().toISOString(), type: "msg",
+      id: nextId++,
+      ts: new Date().toISOString(),
+      type: "msg",
       agent: mode === "llm" ? "档案馆(AI萃取)" : "档案馆(结构化聚合)",
-      channel: target, text: `【萃取自「${channel}」】\n${text}`,
-      reply_to: null, is_digest: true, project: derive({ text, channel: target }).project, tags: [], trust: "local",
+      channel: target,
+      text: `【萃取自「${channel}」】\n${text}`,
+      reply_to: null,
+      is_digest: true,
+      project: derive({ text, channel: target }).project,
+      tags: [],
+      trust: "local",
     });
     audit("digest", "档案馆", true, channel + "/" + mode);
     return json(res, 200, { ok: true, id: m.id, mode, note, text });
@@ -925,7 +1260,10 @@ async function route(req, res) {
     const acts = [];
     for (const line of fs.readFileSync(DATA_FILE, "utf8").split("\n")) {
       if (!line.trim()) continue;
-      try { const m = JSON.parse(line); if (m.type === "audit") acts.push(m); } catch {}
+      try {
+        const m = JSON.parse(line);
+        if (m.type === "audit") acts.push(m);
+      } catch {}
     }
     acts.sort((a, b) => b.id - a.id);
     return json(res, 200, { count: acts.length, recent: acts.slice(0, n) });
@@ -955,7 +1293,11 @@ async function route(req, res) {
     };
     const pubDir = path.resolve(ROOT, "public");
     let rel = null;
-    try { rel = decodeURIComponent(p.replace(/^\/+/, "")); } catch { /* 非法百分号编码：按 404 处理 */ }
+    try {
+      rel = decodeURIComponent(p.replace(/^\/+/, ""));
+    } catch {
+      /* 非法百分号编码：按 404 处理 */
+    }
     const file = rel != null && !rel.includes("\0") ? path.resolve(pubDir, rel) : null;
     if (file && file.startsWith(pubDir + path.sep)) {
       const ext = path.extname(file).toLowerCase();
@@ -975,9 +1317,25 @@ async function route(req, res) {
 
   json(res, 404, {
     error: "未知接口",
-    available: ["/api/health", "/api/context", "/api/search", "/api/feed", "/api/facets",
-      "/api/board", "/api/upstream", "/api/digest", "/api/agents", "/api/events", "/api/post",
-      "/api/register", "/api/caps", "/api/presence", "/api/task", "/api/tasks", "/api/audit"],
+    available: [
+      "/api/health",
+      "/api/context",
+      "/api/search",
+      "/api/feed",
+      "/api/facets",
+      "/api/board",
+      "/api/upstream",
+      "/api/digest",
+      "/api/agents",
+      "/api/events",
+      "/api/post",
+      "/api/register",
+      "/api/caps",
+      "/api/presence",
+      "/api/task",
+      "/api/tasks",
+      "/api/audit",
+    ],
   });
 }
 
@@ -1004,6 +1362,8 @@ server.listen(PORT, HOST, () => {
     logLine(`[WARN] PLAZA_HOST=${HOST}：广场的读接口不需要令牌，监听非回环地址会把全部消息暴露给同网段。`);
   }
   logLine(`AgentPlaza v${VERSION} 已启动: http://${HOST}:${PORT}`);
-  logLine(`数据: ${DATA_FILE} | 消息 ${messages.filter(isMsg).length} 条 | 状态板 ${boards().length} | 上游地图 ${upstreamItems().length} | 任务 ${tasks.size} | 注册代理 ${Object.keys(agents).length}`);
+  logLine(
+    `数据: ${DATA_FILE} | 消息 ${messages.filter(isMsg).length} 条 | 状态板 ${boards().length} | 上游地图 ${upstreamItems().length} | 任务 ${tasks.size} | 注册代理 ${Object.keys(agents).length}`,
+  );
   logLine(`频道: ${CHANNELS.join(" / ")}`);
 });

@@ -18,7 +18,9 @@ let LOCAL_TOKEN = "";
 try {
   const mod = await import("./credentials.local.js");
   LOCAL_TOKEN = String(mod.DEFAULT_TOKEN || "");
-} catch { /* 无本地凭据文件 */ }
+} catch {
+  /* 无本地凭据文件 */
+}
 
 export function getAgent() {
   return localStorage.getItem(LS_AGENT) || DEFAULT_AGENT;
@@ -62,7 +64,11 @@ async function req(path, { method = "GET", body } = {}) {
   }
 
   let data = null;
-  try { data = await res.json(); } catch { /* 非 JSON 响应 */ }
+  try {
+    data = await res.json();
+  } catch {
+    /* 非 JSON 响应 */
+  }
 
   if (!res.ok || (data && data.error)) {
     throw new ApiError(res.status, data || { error: `HTTP ${res.status}` });
@@ -81,8 +87,7 @@ export const health = () => req("/api/health");
 export const facets = () => req("/api/facets");
 export const feed = (channel, limit = 100, after = 0, project = "", tag = "") =>
   req(`/api/feed?${qs({ channel, limit, after, project, tag })}`);
-export const search = (q, project, tag, limit = 50) =>
-  req(`/api/search?${qs({ q, project, tag, limit })}`);
+export const search = (q, project, tag, limit = 50) => req(`/api/search?${qs({ q, project, tag, limit })}`);
 export const boards = () => req("/api/board");
 export const upstream = () => req("/api/upstream");
 export const tasks = () => req("/api/tasks");
@@ -93,21 +98,16 @@ export const audits = (limit = 50) => req(`/api/audit?limit=${limit}`);
 
 /* ---------- 写 ---------- */
 export const post = (body) => req("/api/post", { method: "POST", body });
-export const digest = (channel, count = 50) =>
-  req("/api/digest", { method: "POST", body: { channel, count } });
+export const digest = (channel, count = 50) => req("/api/digest", { method: "POST", body: { channel, count } });
 export const saveBoard = (body) => req("/api/board", { method: "POST", body });
 export const saveUpstream = (body) => req("/api/upstream", { method: "POST", body });
 export const createTask = (body) => req("/api/task", { method: "POST", body });
-export const claimTask = (taskId, by) =>
-  req(`/api/task/${taskId}/claim`, { method: "POST", body: { by } });
+export const claimTask = (taskId, by) => req(`/api/task/${taskId}/claim`, { method: "POST", body: { by } });
 export const resultTask = (taskId, by, outcome, result, artifacts) =>
   req(`/api/task/${taskId}/result`, {
     method: "POST",
     body: { by, outcome, result, artifacts },
   });
-export const register = (agent, trust) =>
-  req("/api/register", { method: "POST", body: { agent, trust } });
-export const setCaps = (agent, capsList) =>
-  req("/api/caps", { method: "POST", body: { agent, caps: capsList } });
-export const setPresence = (agent, status) =>
-  req("/api/presence", { method: "POST", body: { agent, status } });
+export const register = (agent, trust) => req("/api/register", { method: "POST", body: { agent, trust } });
+export const setCaps = (agent, capsList) => req("/api/caps", { method: "POST", body: { agent, caps: capsList } });
+export const setPresence = (agent, status) => req("/api/presence", { method: "POST", body: { agent, status } });

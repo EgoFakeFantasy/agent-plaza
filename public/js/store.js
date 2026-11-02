@@ -41,17 +41,20 @@ export async function loadHealth() {
   try {
     state.health = await api.health();
     emit("health", state.health);
-  } catch { /* 静默：顶部徽章会显示连接状态 */ }
+  } catch {
+    /* 静默：顶部徽章会显示连接状态 */
+  }
 }
 
 export async function loadFacets() {
   try {
     const f = await api.facets();
     state.facets = Object.assign({ channels: {}, projects: {}, tags: {}, agents: {} }, f);
-    state.facets.knowledge =
-      (f.channels?.["经验库"] || 0) + (f.channels?.["用户印象"] || 0);
+    state.facets.knowledge = (f.channels?.["经验库"] || 0) + (f.channels?.["用户印象"] || 0);
     emit("facets", state.facets);
-  } catch { /* 保持旧值 */ }
+  } catch {
+    /* 保持旧值 */
+  }
 }
 
 export function pushMessage(m) {
@@ -126,10 +129,20 @@ export function connectStream() {
   };
   es.onmessage = (e) => {
     let m;
-    try { m = JSON.parse(e.data); } catch { return; }
+    try {
+      m = JSON.parse(e.data);
+    } catch {
+      return;
+    }
 
-    if (m.kind === "task") { emit("task-event", m); return; }
-    if (m.kind === "presence") { emit("presence-event", m); return; }
+    if (m.kind === "task") {
+      emit("task-event", m);
+      return;
+    }
+    if (m.kind === "presence") {
+      emit("presence-event", m);
+      return;
+    }
 
     // v2 广播形态为 {kind:"message", msg:{...}}
     const msg = m.kind === "message" ? m.msg : m;

@@ -21,7 +21,9 @@ function raw(pathname, { method = "GET", headers = {}, body } = {}) {
       res.on("data", (c) => (data += c));
       res.on("end", () => {
         let parsed = null;
-        try { parsed = JSON.parse(data); } catch {}
+        try {
+          parsed = JSON.parse(data);
+        } catch {}
         resolve({ status: res.statusCode, headers: res.headers, body: parsed, text: data });
       });
     });
@@ -30,21 +32,34 @@ function raw(pathname, { method = "GET", headers = {}, body } = {}) {
     req.end();
   });
 }
-const post = (p, body, headers = {}) => raw(p, { method: "POST", body, headers: { "Content-Type": "application/json", ...headers } });
+const post = (p, body, headers = {}) =>
+  raw(p, { method: "POST", body, headers: { "Content-Type": "application/json", ...headers } });
 
 test.before(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "plaza-test-"));
   child = spawn(process.execPath, [path.join(ROOT, "server.js")], {
-    env: { ...process.env, PLAZA_PORT: String(PORT), PLAZA_DATA: path.join(dir, "plaza.jsonl"), PLAZA_AGENTS: path.join(dir, "agents.json"), PLAZA_LOG_DIR: path.join(dir, "logs"), PLAZA_OLLAMA: "http://127.0.0.1:9" },
+    env: {
+      ...process.env,
+      PLAZA_PORT: String(PORT),
+      PLAZA_DATA: path.join(dir, "plaza.jsonl"),
+      PLAZA_AGENTS: path.join(dir, "agents.json"),
+      PLAZA_LOG_DIR: path.join(dir, "logs"),
+      PLAZA_OLLAMA: "http://127.0.0.1:9",
+    },
     stdio: "ignore",
   });
   for (let i = 0; i < 100; i++) {
-    try { if ((await raw("/api/health")).status === 200) return; } catch {}
+    try {
+      if ((await raw("/api/health")).status === 200) return;
+    } catch {}
     await new Promise((r) => setTimeout(r, 50));
   }
   throw new Error("server did not start");
 });
-test.after(() => { child.kill(); fs.rmSync(dir, { recursive: true, force: true }); });
+test.after(() => {
+  child.kill();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
 
 test("JSON 响应不再带通配 CORS，跨站请求被拒绝", async () => {
   const h = await raw("/api/health");
@@ -52,7 +67,11 @@ test("JSON 响应不再带通配 CORS，跨站请求被拒绝", async () => {
   assert.equal(h.headers["x-content-type-options"], "nosniff");
   const read = await raw("/api/feed", { headers: { Origin: "https://evil.example" } });
   assert.equal(read.status, 403);
-  const write = await raw("/api/post", { method: "POST", headers: { Origin: "https://evil.example", "Content-Type": "text/plain" }, body: { agent: "x", text: "csrf" } });
+  const write = await raw("/api/post", {
+    method: "POST",
+    headers: { Origin: "https://evil.example", "Content-Type": "text/plain" },
+    body: { agent: "x", text: "csrf" },
+  });
   assert.equal(write.status, 403);
   const same = await raw("/api/health", { headers: { Origin: BASE } });
   assert.equal(same.status, 200);
@@ -74,11 +93,19 @@ test("已注册 agent 的令牌不会被他人取回或改写", async () => {
   assert.equal(hijack.status, 401);
   const noToken = await post("/api/post", { agent: "ext", text: "hi" });
   assert.equal(noToken.status, 401);
-  const ok = await post("/api/post", { agent: "ext", text: "hi", trust: "local" }, { "x-plaza-token": first.body.token });
+  const ok = await post(
+    "/api/post",
+    { agent: "ext", text: "hi", trust: "local" },
+    { "x-plaza-token": first.body.token },
+  );
   assert.equal(ok.status, 200);
   const feed = await raw("/api/feed?limit=1");
   assert.equal(feed.body.messages[0].trust, "external-allowlisted", "trust 来自注册表而不是客户端自报");
-  const rotate = await post("/api/register", { agent: "ext", token: "b".repeat(20) }, { "x-plaza-token": first.body.token });
+  const rotate = await post(
+    "/api/register",
+    { agent: "ext", token: "b".repeat(20) },
+    { "x-plaza-token": first.body.token },
+  );
   assert.equal(rotate.status, 200);
   assert.equal(rotate.body.token, "b".repeat(20));
 });
@@ -126,7 +153,10 @@ test("回复会把求助从未答列表里移除", async () => {
   const ask = await post("/api/post", { agent: "a", channel: "求助台", text: "help" });
   let ctx = await raw("/api/context");
   assert.ok(ctx.body.unanswered_help.includes(ask.body.id));
-  assert.equal((await post("/api/post", { agent: "b", channel: "求助台", text: "answer", reply_to: String(ask.body.id) })).status, 200);
+  assert.equal(
+    (await post("/api/post", { agent: "b", channel: "求助台", text: "answer", reply_to: String(ask.body.id) })).status,
+    200,
+  );
   ctx = await raw("/api/context?per=abc");
   assert.ok(!ctx.body.unanswered_help.includes(ask.body.id));
 });

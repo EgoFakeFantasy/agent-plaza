@@ -31,8 +31,14 @@ const TEXT_EXT = /\.(html?|css|js|mjs|json|md|txt|svg|yml|yaml|ps1|vbs|bat|py|le
 function listTracked(root) {
   try {
     const out = execFileSync("git", ["ls-files", "-z"], { cwd: root, maxBuffer: 32 * 1024 * 1024 });
-    return out.toString("utf8").split("\0").filter(Boolean).map((f) => path.join(root, f));
-  } catch { return null; }
+    return out
+      .toString("utf8")
+      .split("\0")
+      .filter(Boolean)
+      .map((f) => path.join(root, f));
+  } catch {
+    return null;
+  }
 }
 
 function walkDir(dir, out = []) {
@@ -62,7 +68,10 @@ function scanFile(file) {
 }
 
 function report(label, items) {
-  if (!items.length) { console.log(`通过：${label} 未发现凭据或本机痕迹`); return; }
+  if (!items.length) {
+    console.log(`通过：${label} 未发现凭据或本机痕迹`);
+    return;
+  }
   console.error(`不通过：${label} 命中 ${items.length} 处`);
   for (const it of items) {
     console.error(`  ${it.file}:${it.line} [${it.label}] ${it.sample}`);
@@ -107,7 +116,10 @@ function selftest() {
 }
 
 function main() {
-  if (process.argv.includes("--selftest")) { selftest(); return; }
+  if (process.argv.includes("--selftest")) {
+    selftest();
+    return;
+  }
   const snapArg = process.argv.indexOf("--snapshot");
   if (snapArg >= 0 && process.argv[snapArg + 1]) {
     const file = path.resolve(ROOT, process.argv[snapArg + 1]);
@@ -127,7 +139,7 @@ function main() {
   const items = [];
   const files = listTracked(ROOT);
   const scope = files ? `git 跟踪清单（${files.length} 个文件）` : "目录遍历（非 git 仓库）";
-  for (const file of (files || walkDir(ROOT))) {
+  for (const file of files || walkDir(ROOT)) {
     if (!fs.existsSync(file) || !TEXT_EXT.test(file) || SKIP_FILES.has(path.basename(file))) continue;
     for (const h of scanFile(file)) items.push({ ...h, file: path.relative(ROOT, file).replace(/\\/g, "/") });
   }
