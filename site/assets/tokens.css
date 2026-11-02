@@ -9,8 +9,7 @@
 
 :root {
   /* 排版 */
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "PingFang SC",
-    "Microsoft YaHei", "Segoe UI", sans-serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
   --font-mono: ui-monospace, Menlo, Consolas, "Cascadia Code", monospace;
   --fs-xs: 11px;
   --fs-sm: 12px;
@@ -36,9 +35,9 @@
   --maxw: 1440px;
 
   /* 阴影 */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .06);
-  --shadow-md: 0 4px 14px rgba(0, 0, 0, .10);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, .18);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.18);
 
   color-scheme: dark;
 }
@@ -63,16 +62,16 @@
   --cyan: #3dd6c6;
   --purple: #c792ea;
 
-  --ok-bg: rgba(62, 207, 142, .14);
-  --warn-bg: rgba(230, 184, 77, .14);
-  --bad-bg: rgba(240, 113, 120, .14);
-  --accent-bg: rgba(91, 157, 255, .14);
-  --cyan-bg: rgba(61, 214, 198, .14);
-  --purple-bg: rgba(199, 146, 234, .14);
+  --ok-bg: rgba(62, 207, 142, 0.14);
+  --warn-bg: rgba(230, 184, 77, 0.14);
+  --bad-bg: rgba(240, 113, 120, 0.14);
+  --accent-bg: rgba(91, 157, 255, 0.14);
+  --cyan-bg: rgba(61, 214, 198, 0.14);
+  --purple-bg: rgba(199, 146, 234, 0.14);
 
   --input-bg: #0b0d11;
-  --hover: rgba(255, 255, 255, .04);
-  --scrim: rgba(0, 0, 0, .55);
+  --hover: rgba(255, 255, 255, 0.04);
+  --scrim: rgba(0, 0, 0, 0.55);
 }
 
 /* ---------- 亮色（同一套语义变量） ---------- */
@@ -96,16 +95,16 @@
   --cyan: #159e95;
   --purple: #8b4fc4;
 
-  --ok-bg: rgba(31, 157, 99, .12);
-  --warn-bg: rgba(184, 128, 26, .14);
-  --bad-bg: rgba(217, 74, 90, .12);
-  --accent-bg: rgba(47, 111, 228, .12);
-  --cyan-bg: rgba(21, 158, 149, .12);
-  --purple-bg: rgba(139, 79, 196, .12);
+  --ok-bg: rgba(31, 157, 99, 0.12);
+  --warn-bg: rgba(184, 128, 26, 0.14);
+  --bad-bg: rgba(217, 74, 90, 0.12);
+  --accent-bg: rgba(47, 111, 228, 0.12);
+  --cyan-bg: rgba(21, 158, 149, 0.12);
+  --purple-bg: rgba(139, 79, 196, 0.12);
 
   --input-bg: #ffffff;
-  --hover: rgba(0, 0, 0, .035);
-  --scrim: rgba(15, 17, 21, .38);
+  --hover: rgba(0, 0, 0, 0.035);
+  --scrim: rgba(15, 17, 21, 0.38);
 }
 
 /* 未显式指定主题时跟随系统 */
@@ -129,15 +128,15 @@
     --cyan: #159e95;
     --purple: #8b4fc4;
 
-    --ok-bg: rgba(31, 157, 99, .12);
-    --warn-bg: rgba(184, 128, 26, .14);
-    --bad-bg: rgba(217, 74, 90, .12);
-    --accent-bg: rgba(47, 111, 228, .12);
-    --cyan-bg: rgba(21, 158, 149, .12);
-    --purple-bg: rgba(139, 79, 196, .12);
+    --ok-bg: rgba(31, 157, 99, 0.12);
+    --warn-bg: rgba(184, 128, 26, 0.14);
+    --bad-bg: rgba(217, 74, 90, 0.12);
+    --accent-bg: rgba(47, 111, 228, 0.12);
+    --cyan-bg: rgba(21, 158, 149, 0.12);
+    --purple-bg: rgba(139, 79, 196, 0.12);
 
     --input-bg: #ffffff;
-    --hover: rgba(0, 0, 0, .035);
-    --scrim: rgba(15, 17, 21, .38);
+    --hover: rgba(0, 0, 0, 0.035);
+    --scrim: rgba(15, 17, 21, 0.38);
   }
 }

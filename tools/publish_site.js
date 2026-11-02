@@ -40,9 +40,13 @@ const SITE_DIR = strArg("site", path.join(ROOT, "site"));
 const DAYS = parseInt(arg("days", "60"), 10) || 60;
 const TIMELINE = parseInt(arg("timeline", "240"), 10) || 240;
 const projArg = arg("project", "");
-const PROJECTS = typeof projArg === "string"
-  ? projArg.split(",").map((x) => x.trim()).filter(Boolean)
-  : [];
+const PROJECTS =
+  typeof projArg === "string"
+    ? projArg
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean)
+    : [];
 
 function loadStore(file) {
   const messages = [];
@@ -52,7 +56,11 @@ function loadStore(file) {
   for (const line of fs.readFileSync(file, "utf8").split("\n")) {
     if (!line.trim()) continue;
     let m;
-    try { m = JSON.parse(line); } catch { continue; }
+    try {
+      m = JSON.parse(line);
+    } catch {
+      continue;
+    }
     if (m.id > maxId) maxId = m.id;
     if (m.type === "task") {
       tasks.set(m.task_id, m);
@@ -71,9 +79,14 @@ function loadStore(file) {
     return [...map.values()];
   };
   return {
-    messages, tasks, taskCreated,
+    messages,
+    tasks,
+    taskCreated,
     boards: () => latest("board", (m) => m.project).sort((a, b) => String(a.project).localeCompare(String(b.project))),
-    upstreamItems: () => latest("upstream", (m) => m.key || m.component).sort((a, b) => String(a.component).localeCompare(String(b.component))),
+    upstreamItems: () =>
+      latest("upstream", (m) => m.key || m.component).sort((a, b) =>
+        String(a.component).localeCompare(String(b.component)),
+      ),
     maxId,
   };
 }
@@ -82,7 +95,9 @@ function serverVersion() {
   try {
     const src = fs.readFileSync(path.join(ROOT, "server.js"), "utf8");
     return (src.match(/const VERSION = "([^"]+)"/) || [null, "unknown"])[1];
-  } catch { return "unknown"; }
+  } catch {
+    return "unknown";
+  }
 }
 
 // 递归扫描站点目录：源码里藏了凭据或本机路径同样拦下。
@@ -92,7 +107,10 @@ function scanTree(dir) {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
       if (e.name === ".git" || e.name === "node_modules") continue;
       const p = path.join(d, e.name);
-      if (e.isDirectory()) { walk(p); continue; }
+      if (e.isDirectory()) {
+        walk(p);
+        continue;
+      }
       if (!/\.(html?|css|js|mjs|json|md|txt|svg)$/i.test(e.name)) continue;
       const hits = findLeaks({ scan: fs.readFileSync(p, "utf8") });
       if (hits.length) offenders.push(`${path.relative(dir, p)}: ${hits.map((h) => h.label).join(",")}`);
@@ -108,17 +126,32 @@ function main() {
     process.exit(2);
   }
   const store = loadStore(DATA_FILE);
-  const bundle = buildBundle({
-    messages: store.messages, tasks: store.tasks, taskCreated: store.taskCreated,
-    boards: store.boards, upstreamItems: store.upstreamItems,
-    channels: CHANNELS, version: serverVersion(),
-    onlyProjects: PROJECTS.length ? PROJECTS : null,
-  }, { days: DAYS, timeline: TIMELINE });
+  const bundle = buildBundle(
+    {
+      messages: store.messages,
+      tasks: store.tasks,
+      taskCreated: store.taskCreated,
+      boards: store.boards,
+      upstreamItems: store.upstreamItems,
+      channels: CHANNELS,
+      version: serverVersion(),
+      onlyProjects: PROJECTS.length ? PROJECTS : null,
+    },
+    { days: DAYS, timeline: TIMELINE },
+  );
 
   const forbidden = findForbidden(bundle);
-  if (forbidden) { console.error(`结构安全门不通过：快照出现禁止键 ${forbidden}`); process.exit(1); }
+  if (forbidden) {
+    console.error(`结构安全门不通过：快照出现禁止键 ${forbidden}`);
+    process.exit(1);
+  }
 
-  try { assertPublicSafe(bundle); } catch (e) { console.error(String(e.message)); process.exit(1); }
+  try {
+    assertPublicSafe(bundle);
+  } catch (e) {
+    console.error(String(e.message));
+    process.exit(1);
+  }
 
   const outDir = path.join(SITE_DIR, "data");
   fs.mkdirSync(outDir, { recursive: true });
@@ -136,7 +169,9 @@ function main() {
   const stat = fs.statSync(out);
   console.log(`快照已生成：${out} (${(stat.size / 1024).toFixed(1)} KB)`);
   console.log(`  发布范围：${bundle.scope ? "仅项目 " + bundle.scope.join("、") : "全平台所有项目"}`);
-  console.log(`  消息 ${bundle.stats.messages} | 任务 ${bundle.stats.tasks} | 项目 ${bundle.projects.length} | 时间线 ${bundle.timeline.length} 条元数据`);
+  console.log(
+    `  消息 ${bundle.stats.messages} | 任务 ${bundle.stats.tasks} | 项目 ${bundle.projects.length} | 时间线 ${bundle.timeline.length} 条元数据`,
+  );
   console.log(`  任务状态：${JSON.stringify(bundle.counts.by_state)}`);
   console.log(`  最大消息 id：${store.maxId}（用于判断快照是否落后）`);
 
@@ -153,12 +188,14 @@ function main() {
       const branch = typeof arg("branch", "") === "string" ? arg("branch") : "";
       const remotes = execFileSync("git", ["remote"], { cwd: ROOT, encoding: "utf8" }).trim().split("\n");
       if (!remotes.includes(remote)) {
-        console.error(`未配置远端 ${remote}（现有：${remotes.filter(Boolean).join(", ") || "无"}）。` +
-          "快照已在本地提交；推送属对外共享状态变更，需先显式配置远端。");
+        console.error(
+          `未配置远端 ${remote}（现有：${remotes.filter(Boolean).join(", ") || "无"}）。` +
+            "快照已在本地提交；推送属对外共享状态变更，需先显式配置远端。",
+        );
         process.exit(3);
       }
-      const target = branch || execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"],
-        { cwd: ROOT, encoding: "utf8" }).trim();
+      const target =
+        branch || execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim();
       execFileSync("git", ["push", remote, target], { cwd: ROOT, stdio: "inherit" });
       console.log(`已推送到 ${remote}/${target}`);
     } else {

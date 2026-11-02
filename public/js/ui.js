@@ -50,9 +50,10 @@ export function emptyNode(text) {
   return el("div.empty", esc(text));
 }
 export function metricNode(k, v, s) {
-  return el("div.metric",
-    `<div class="k">${esc(k)}</div><div class="v">${esc(v)}</div>` +
-    (s ? `<div class="s">${esc(s)}</div>` : ""));
+  return el(
+    "div.metric",
+    `<div class="k">${esc(k)}</div><div class="v">${esc(v)}</div>` + (s ? `<div class="s">${esc(s)}</div>` : ""),
+  );
 }
 
 /* ---------- 表单模态框 ---------- */
@@ -75,9 +76,14 @@ export function openForm({ title, fields = [], okText = "提交", width }) {
         if (f.type === "textarea") {
           input = `<textarea id="${id}" rows="${f.rows || 3}" placeholder="${esc(f.placeholder || "")}">${esc(f.value || "")}</textarea>`;
         } else if (f.type === "select") {
-          input = `<select id="${id}">` +
-            (f.options || []).map(([v, l]) =>
-              `<option value="${esc(v)}"${String(v) === String(f.value ?? "") ? " selected" : ""}>${esc(l)}</option>`).join("") +
+          input =
+            `<select id="${id}">` +
+            (f.options || [])
+              .map(
+                ([v, l]) =>
+                  `<option value="${esc(v)}"${String(v) === String(f.value ?? "") ? " selected" : ""}>${esc(l)}</option>`,
+              )
+              .join("") +
             `</select>`;
         } else {
           input = `<input id="${id}" type="text" value="${esc(f.value || "")}" placeholder="${esc(f.placeholder || "")}" list="${esc(f.list || "")}" />`;
@@ -98,7 +104,10 @@ export function openForm({ title, fields = [], okText = "提交", width }) {
     scrim.appendChild(modal);
     root.appendChild(scrim);
 
-    const close = (val) => { scrim.remove(); resolve(val); };
+    const close = (val) => {
+      scrim.remove();
+      resolve(val);
+    };
     modal.querySelector("[data-cancel]").onclick = () => close(null);
     modal.querySelector("[data-ok]").onclick = () => {
       const out = {};
@@ -108,9 +117,14 @@ export function openForm({ title, fields = [], okText = "提交", width }) {
       }
       close(out);
     };
-    scrim.addEventListener("click", (e) => { if (e.target === scrim) close(null); });
+    scrim.addEventListener("click", (e) => {
+      if (e.target === scrim) close(null);
+    });
     const onKey = (e) => {
-      if (e.key === "Escape") { document.removeEventListener("keydown", onKey); close(null); }
+      if (e.key === "Escape") {
+        document.removeEventListener("keydown", onKey);
+        close(null);
+      }
     };
     document.addEventListener("keydown", onKey);
 
@@ -124,10 +138,20 @@ export function highlight(text, query) {
   // 在原文上切分再逐段转义：直接对已转义的 HTML 做替换会切坏 &amp; 之类的实体，
   // 后一个词也可能命中前一个词插入的 <mark> 标签。
   const raw = String(text ?? "");
-  const q = String(query || "").trim().split(/\s+/).filter(Boolean);
+  const q = String(query || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
   if (!q.length) return esc(raw);
-  const re = new RegExp(q.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).sort((a, b) => b.length - a.length).join("|"), "gi");
-  let out = "", last = 0;
+  const re = new RegExp(
+    q
+      .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .sort((a, b) => b.length - a.length)
+      .join("|"),
+    "gi",
+  );
+  let out = "",
+    last = 0;
   for (const m of raw.matchAll(re)) {
     if (!m[0]) continue;
     out += esc(raw.slice(last, m.index)) + "<mark>" + esc(m[0]) + "</mark>";

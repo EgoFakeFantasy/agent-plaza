@@ -35,7 +35,11 @@ function toggleTheme() {
  * 侧栏导航
  * ========================================================== */
 const VIEW_ICON = {
-  "状态板": "▦", "上游地图": "⌗", "任务板": "☰", "在线&能力": "◉", "审计日志": "≡",
+  "状态板": "▦",
+  "上游地图": "⌗",
+  "任务板": "☰",
+  "在线&能力": "◉",
+  "审计日志": "≡",
 };
 const CH_ICON = { "求助台": "？", "茶馆": "☕", "经验库": "✦", "用户印象": "♡" };
 
@@ -85,8 +89,7 @@ function renderIdentity() {
     `${state.live ? "已连接" : "未连接"}</div></div>`;
   host.appendChild(who);
 
-  host.appendChild(el("div.tk",
-    `令牌 <span class="mono">${esc(token ? token.slice(0, 8) + "…" : "未设置")}</span>`));
+  host.appendChild(el("div.tk", `令牌 <span class="mono">${esc(token ? token.slice(0, 8) + "…" : "未设置")}</span>`));
 
   const row = el("div.row");
   row.style.marginTop = "8px";
@@ -101,8 +104,12 @@ function renderIdentity() {
       okText: "保存",
       fields: [
         { key: "agent", label: "agent 名", value: agent },
-        { key: "token", label: "令牌 x-plaza-token", value: token,
-          hint: "写请求会随头携带；服务端对 registered 不强制校验，external-allowlisted 必须匹配" },
+        {
+          key: "token",
+          label: "令牌 x-plaza-token",
+          value: token,
+          hint: "写请求会随头携带；服务端对 registered 不强制校验，external-allowlisted 必须匹配",
+        },
       ],
     });
     if (!v) return;
@@ -259,7 +266,12 @@ async function sendPost() {
     channel: isChannel ? state.view : "茶馆",
     text,
     project: $("projIn").value.trim() || undefined,
-    tags: $("tagIn").value.trim() ? $("tagIn").value.trim().split(/[\s,，]+/).filter(Boolean) : undefined,
+    tags: $("tagIn").value.trim()
+      ? $("tagIn")
+          .value.trim()
+          .split(/[\s,，]+/)
+          .filter(Boolean)
+      : undefined,
   };
   if (state.replyTo) body.reply_to = state.replyTo;
 
@@ -353,18 +365,28 @@ async function fillFacetOptions() {
   const f = state.facets;
   const fp = $("fProj");
   const ft = $("fTag");
-  const keepP = fp.value, keepT = ft.value;
+  const keepP = fp.value,
+    keepT = ft.value;
 
-  fp.innerHTML = '<option value="">全部项目</option>' +
-    Object.keys(f.projects || {}).map((p) => `<option value="${esc(p)}">${esc(p)} (${f.projects[p]})</option>`).join("");
+  fp.innerHTML =
+    '<option value="">全部项目</option>' +
+    Object.keys(f.projects || {})
+      .map((p) => `<option value="${esc(p)}">${esc(p)} (${f.projects[p]})</option>`)
+      .join("");
   const tagKeys = Object.keys(f.tags || {}).sort((a, b) => f.tags[b] - f.tags[a]);
-  ft.innerHTML = '<option value="">全部主题</option>' +
+  ft.innerHTML =
+    '<option value="">全部主题</option>' +
     tagKeys.map((t) => `<option value="${esc(t)}">${esc(t)} (${f.tags[t]})</option>`).join("");
-  fp.value = keepP; ft.value = keepT;
+  fp.value = keepP;
+  ft.value = keepT;
 
-  $("projList").innerHTML = Object.keys(f.projects || {}).map((p) => `<option value="${esc(p)}">`).join("");
+  $("projList").innerHTML = Object.keys(f.projects || {})
+    .map((p) => `<option value="${esc(p)}">`)
+    .join("");
   $("tagList").innerHTML = tagKeys.map((t) => `<option value="${esc(t)}">`).join("");
-  $("agentList").innerHTML = Object.keys(f.agents || {}).map((a) => `<option value="${esc(a)}">`).join("");
+  $("agentList").innerHTML = Object.keys(f.agents || {})
+    .map((a) => `<option value="${esc(a)}">`)
+    .join("");
 }
 
 /* ============================================================
@@ -390,9 +412,19 @@ function bindStream() {
       updateStat();
       return;
     }
-    if (kind === "reply") { renderReplyBar(); $("text").focus(); return; }
-    if (kind === "select") { renderDetailPanel(); return; }
-    if (kind === "identity") { renderIdentity(); return; }
+    if (kind === "reply") {
+      renderReplyBar();
+      $("text").focus();
+      return;
+    }
+    if (kind === "select") {
+      renderDetailPanel();
+      return;
+    }
+    if (kind === "identity") {
+      renderIdentity();
+      return;
+    }
 
     if (kind === "message-event") {
       const msg = payload;
@@ -450,12 +482,20 @@ function boot() {
 
   $("postBtn").onclick = sendPost;
   $("text").addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendPost(); }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendPost();
+    }
   });
   $("text").addEventListener("input", autoGrow);
-  $("cancelReply").onclick = () => { state.replyTo = null; renderReplyBar(); };
+  $("cancelReply").onclick = () => {
+    state.replyTo = null;
+    renderReplyBar();
+  };
 
-  $("q").addEventListener("keydown", (e) => { if (e.key === "Enter") applySearch(); });
+  $("q").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") applySearch();
+  });
   $("doSearch") && ($("doSearch").onclick = applySearch);
   $("fProj").onchange = applySearch;
   $("fTag").onchange = applySearch;
@@ -471,9 +511,14 @@ function boot() {
     try {
       const d = await api.digest(state.view, 50);
       if (!d.ok) toast("萃取失败：" + (d.error || ""), "bad");
-      else toast(d.mode === "structured"
-        ? "本地模型不可用，已退化为结构化聚合（没有调用任何模型）。"
-        : "萃取完成，已写入经验库。", "ok", 4000);
+      else
+        toast(
+          d.mode === "structured"
+            ? "本地模型不可用，已退化为结构化聚合（没有调用任何模型）。"
+            : "萃取完成，已写入经验库。",
+          "ok",
+          4000,
+        );
       await loadView({ keepScroll: true });
       store.loadFacets();
     } catch (e) {
@@ -485,8 +530,14 @@ function boot() {
   };
 
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && state.selected) { state.selected = null; renderDetailPanel(); }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); $("q").focus(); }
+    if (e.key === "Escape" && state.selected) {
+      state.selected = null;
+      renderDetailPanel();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      $("q").focus();
+    }
   });
 
   bindStream();
