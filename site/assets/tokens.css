@@ -40,6 +40,12 @@
   --shadow-md: 0 4px 14px rgba(0, 0, 0, .10);
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, .18);
 
+  /* 动效与焦点：统一节奏，键盘焦点用同一圈光晕 */
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --dur: .16s;
+  --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 32%, transparent);
+  --grad-brand: linear-gradient(135deg, var(--accent) 0%, var(--purple) 100%);
+
   color-scheme: dark;
 }
 
@@ -73,6 +79,13 @@
   --input-bg: #0b0d11;
   --hover: rgba(255, 255, 255, .04);
   --scrim: rgba(0, 0, 0, .55);
+
+  /* 暗底上 .06 的阴影等于没有，按暗色重调 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .35);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, .35);
+  --shadow-lg: 0 18px 48px rgba(0, 0, 0, .55);
+  --bg-glow: radial-gradient(1200px 520px at 12% -10%, rgba(91, 157, 255, .10), transparent 60%),
+    radial-gradient(900px 480px at 100% 0%, rgba(199, 146, 234, .07), transparent 55%);
 }
 
 /* ---------- 亮色（同一套语义变量） ---------- */
@@ -87,7 +100,7 @@
   --line-soft: #eceff4;
   --fg: #1f2329;
   --fg-dim: #414855;
-  --muted: #8b93a7;
+  --muted: #6b7385;
 
   --ok: #1f9d63;
   --warn: #b8801a;
@@ -106,6 +119,12 @@
   --input-bg: #ffffff;
   --hover: rgba(0, 0, 0, .035);
   --scrim: rgba(15, 17, 21, .38);
+
+  --shadow-sm: 0 1px 2px rgba(15, 17, 21, .06);
+  --shadow-md: 0 6px 18px rgba(15, 17, 21, .08);
+  --shadow-lg: 0 18px 44px rgba(15, 17, 21, .16);
+  --bg-glow: radial-gradient(1200px 520px at 12% -10%, rgba(47, 111, 228, .07), transparent 60%),
+    radial-gradient(900px 480px at 100% 0%, rgba(139, 79, 196, .05), transparent 55%);
 }
 
 /* 未显式指定主题时跟随系统 */
@@ -121,6 +140,7 @@
     --line-soft: #eceff4;
     --fg: #1f2329;
     --fg-dim: #414855;
+    --muted: #6b7385;
 
     --ok: #1f9d63;
     --warn: #b8801a;
@@ -139,5 +159,11 @@
     --input-bg: #ffffff;
     --hover: rgba(0, 0, 0, .035);
     --scrim: rgba(15, 17, 21, .38);
+
+    --shadow-sm: 0 1px 2px rgba(15, 17, 21, .06);
+    --shadow-md: 0 6px 18px rgba(15, 17, 21, .08);
+    --shadow-lg: 0 18px 44px rgba(15, 17, 21, .16);
+    --bg-glow: radial-gradient(1200px 520px at 12% -10%, rgba(47, 111, 228, .07), transparent 60%),
+      radial-gradient(900px 480px at 100% 0%, rgba(139, 79, 196, .05), transparent 55%);
   }
 }

@@ -150,7 +150,7 @@ function taskCard(t) {
   const people = [t.from && `派 ${esc(t.from)}`, t.to && `收 ${esc(t.to)}`,
     t.claimed_by && `领 ${esc(t.claimed_by)}`, t.by && `交 ${esc(t.by)}`].filter(Boolean).join(" · ");
   return `<div class="task">` +
-    `<div class="ttl">#${t.task_id} ${esc(t.title)}</div>` +
+    `<div class="ttl"><span class="tid">#${t.task_id}</span>${esc(t.title)}</div>` +
     `<div class="meta">` +
     `<span class="pill ${STATE_PILL[t.state] || ""}">${esc(STATE_LABEL[t.state] || t.state)}</span>` +
     (t.project ? `<span class="chip">${esc(t.project)}</span>` : "") +
@@ -264,7 +264,8 @@ function viewTimeline() {
     `<span class="dim" style="font-size:var(--fs-xs)">命中 ${rows.length} 条</span></div>` +
     `<div class="tl">` + (rows.length ? rows.slice(0, 120).map((x) =>
       `<div class="tl-row"><span class="at">${esc(x.at)}</span>` +
-      `<span class="chip" style="background:${CHANNEL_COLOR[x.channel] || "var(--panel3)"};color:#fff">${esc(x.channel)}</span>` +
+      // 频道色只作为 --ch 传入，底色/文字由样式表按主题混色（原先白字压黄底在两种主题下都看不清）
+      `<span class="chip ch" style="--ch:${CHANNEL_COLOR[x.channel] || "var(--muted)"}">${esc(x.channel)}</span>` +
       `<span class="who">${esc(x.agent)}${x.reply_to ? ` <span class="dim">↩ #${x.reply_to}</span>` : ""}` +
       (x.digest ? ` <span class="chip">萃取</span>` : "") +
       `</span><span class="len" title="${x.chars} 字">${x.chars} 字` +
